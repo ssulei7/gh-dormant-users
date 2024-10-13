@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"fmt"
 	"log"
 
 	"github.com/spf13/cobra"
@@ -14,6 +13,7 @@ var rootCmd = &cobra.Command{
 
 func init() {
 	reportCmd.Flags().String("org-name", "", "The name of the organization to report upon")
+	reportCmd.Flags().BoolP("email", "e", false, "Check if user has email")
 	reportCmd.Flags().String("date", "", "The date from which to start looking for activity")
 	reportCmd.Flags().BoolP("verbose", "v", false, "Enable verbose logging")
 	if err := reportCmd.MarkFlagRequired("org-name"); err != nil {
@@ -23,7 +23,6 @@ func init() {
 		log.Fatal(err)
 	}
 	rootCmd.AddCommand(reportCmd)
-	fmt.Println("Added a flag to the report command")
 	rootCmd.CompletionOptions.DisableDefaultCmd = true
 }
 
