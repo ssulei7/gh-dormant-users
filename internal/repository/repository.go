@@ -53,7 +53,9 @@ func GetOrgRepositories(organization string, client api.RESTClient) Repositories
 		// Check for the 'Link' header to see if there are more pages
 		linkHeader := response.Header.Get("Link")
 		if linkHeader == "" {
-			log.Printf("No more pages to fetch")
+			if config.Verbose {
+				log.Printf("No more pages to fetch")
+			}
 			break
 		}
 
