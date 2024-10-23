@@ -4,31 +4,32 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"strings"
 
 	"github.com/cli/go-gh"
+	"github.com/cli/go-gh/pkg/api"
+	"github.com/ssulei7/gh-dormant-users/config"
+	"github.com/ssulei7/gh-dormant-users/internal/header"
+	"github.com/ssulei7/gh-dormant-users/internal/limiter"
 )
 
 type User struct {
-	Login string `json:"login"`
-	ID    int    `json:"id"`
-	Email string `json:"email"`
+	Login  string `json:"login"`
+	ID     int    `json:"id"`
+	Email  string `json:"email"`
+	Active bool
 }
 
 type Users []User
 
-func GetOrganizationUsers(organization string) Users {
+func GetOrganizationUsers(organization string, email bool, client api.RESTClient) Users {
 	log.Printf("Starting to fetch users for organization: %s", organization)
-	client, err := gh.RESTClient(nil)
-	if err != nil {
-		log.Fatalf("Failed to create REST client: %v", err)
-	}
-
 	var allUsers Users
-	url := "orgs/" + organization + "/members"
+	url := fmt.Sprintf("orgs/%s/members?per_page=100", organization)
 
 	for {
-		log.Printf("Fetching users from URL: %s", url)
+		if config.Verbose {
+			log.Printf("Fetching users from URL: %s", url)
+		}
 		response, err := client.Request("GET", url, nil)
 		if err != nil {
 			log.Fatalf("Failed to fetch users: %v", err)
@@ -41,21 +42,31 @@ func GetOrganizationUsers(organization string) Users {
 			log.Fatalf("Failed to decode users: %v", err)
 		}
 
-		log.Printf("Fetched %d users", len(users))
-		// get user emails
-		getUserEmails(users)
+		if config.Verbose {
+			log.Printf("Fetched %d users", len(users))
+		}
+
+		// get user emails sequentially
+		if email {
+			getUserEmails(users)
+		}
 		allUsers = append(allUsers, users...)
 
 		// Check for the 'Link' header to see if there are more pages
 		linkHeader := response.Header.Get("Link")
 		if linkHeader == "" {
-			log.Printf("No more pages to fetch")
+			if config.Verbose {
+				log.Printf("No more pages to fetch")
+			}
 			break
 		}
 
-		nextURL := getNextPageURL(linkHeader)
+		nextURL := header.GetNextPageURL(linkHeader)
 		if nextURL == "" {
-			log.Printf("No next page URL found")
+			if config.Verbose {
+				log.Printf("No next page URL found")
+			}
+
 			break
 		}
 
@@ -67,6 +78,14 @@ func GetOrganizationUsers(organization string) Users {
 	return allUsers
 }
 
+func (u *User) MakeActive() {
+	u.Active = true
+}
+
+func (u *User) MakeInactive() {
+	u.Active = false
+}
+
 func getUserEmails(users Users) {
 	log.Println("Getting user emails, if present")
 	client, err := gh.RESTClient(nil)
@@ -74,38 +93,24 @@ func getUserEmails(users Users) {
 		log.Fatalf("Failed to create REST client: %v", err)
 	}
 
-	for i := range users {
-		url := fmt.Sprintf("users/%s", users[i].Login)
+	for index := range users {
+		limiter.AcquireConcurrentLimiter()
+		defer limiter.ReleaseConcurrentLimiter()
+		url := fmt.Sprintf("users/%s", users[index].Login)
 		response, err := client.Request("GET", url, nil)
 		if err != nil {
-			log.Fatalf("Failed to fetch user details: %v", err)
+			log.Printf("Failed to fetch user details: %v", err)
+			continue
 		}
 
 		var userDetails User
 		decoder := json.NewDecoder(response.Body)
 		err = decoder.Decode(&userDetails)
 		if err != nil {
-			log.Fatalf("Failed to decode user details: %v", err)
-		}
-
-		users[i].Email = userDetails.Email
-
-	}
-
-}
-
-func getNextPageURL(linkHeader string) string {
-	links := strings.Split(linkHeader, ",")
-	for _, link := range links {
-		parts := strings.Split(strings.TrimSpace(link), ";")
-		if len(parts) < 2 {
+			log.Printf("Failed to decode user details: %v", err)
 			continue
 		}
-		urlPart := strings.Trim(parts[0], "<>")
-		relPart := strings.TrimSpace(parts[1])
-		if relPart == `rel="next"` {
-			return urlPart
-		}
+
+		users[index].Email = userDetails.Email
 	}
-	return ""
 }
