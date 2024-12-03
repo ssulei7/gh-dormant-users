@@ -3,12 +3,26 @@ package cmd
 import (
 	"log"
 
+	"github.com/pterm/pterm"
 	"github.com/spf13/cobra"
 )
 
 var rootCmd = &cobra.Command{
 	Use:   "gh-dormant-users",
 	Short: "A CLI tool to report upon and take action on dormant GitHub users within GHEC / GHES",
+	Run: func(cmd *cobra.Command, args []string) {
+		// Create cyan text with emoticon
+		text := pterm.NewRGB(0, 255, 255).Sprint("GitHub Dormant Users ૮(-.-)ა")
+
+		// Create a box with padding and the cyan text
+		box := pterm.DefaultBox.WithLeftPadding(5).WithRightPadding(5).WithBottomPadding(3).WithTopPadding(3).Sprint(text)
+
+		// Center the box
+		pterm.DefaultCenter.Println(box)
+
+		// Show available commands
+		cmd.Help()
+	},
 }
 
 func init() {
