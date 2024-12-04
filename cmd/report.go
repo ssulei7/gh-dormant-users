@@ -1,9 +1,8 @@
 package cmd
 
 import (
-	"log"
-
 	"github.com/cli/go-gh"
+	"github.com/pterm/pterm"
 	"github.com/spf13/cobra"
 	"github.com/ssulei7/gh-dormant-users/config"
 	"github.com/ssulei7/gh-dormant-users/internal/activity"
@@ -26,13 +25,13 @@ func generateDormantUserReport(cmd *cobra.Command, args []string) {
 	config.Verbose = cmd.Flags().Changed("verbose")
 	client, err := gh.RESTClient(nil)
 	if err != nil {
-		log.Fatalf("Failed to create REST client: %v", err)
+		pterm.Fatal.PrintOnErrorf("Failed to create REST client: %v", err)
 	}
 
 	// Validate date is no longer than 3 months, and turn into an ISO string
 	isDateValid := dateUtil.ValidateDate(date)
 	if !isDateValid {
-		log.Fatal("Date must be within the last 3 months")
+		pterm.Fatal.Println("Date must be within the last 3 months")
 	}
 
 	// Convert date to iso 8601 format
@@ -42,7 +41,7 @@ func generateDormantUserReport(cmd *cobra.Command, args []string) {
 	repositories := repository.GetOrgRepositories(orgName, client)
 
 	// Now, check for activity in the organization's repositories
-	log.Default().Printf("Checking for activity in organization: %s with %v repositories with %v users\n", orgName, len(repositories), len(users))
+	pterm.Info.Printf("Checking for activity in organization: %s with %v repositories with %v users\n", orgName, len(repositories), len(users))
 	activity.CheckActivity(users, orgName, repositories, isoDate, client)
 	activity.GenerateUserReportCSV(users, orgName+"-dormant-users.csv")
 }
