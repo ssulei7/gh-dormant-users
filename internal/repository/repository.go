@@ -76,6 +76,6 @@ func GetOrgRepositories(organization string, client api.RESTClient) Repositories
 	}
 
 	spinner.Success("Fetched repositories successfully")
-	pterm.Info.Printf("Fetched %d repositories", len(allRepositories))
+	pterm.Info.Printf("Fetched %d repositories\n", len(allRepositories))
 	return allRepositories
 }
