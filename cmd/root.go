@@ -17,8 +17,8 @@ var rootCmd = &cobra.Command{
 		// Create a box with padding and the cyan text
 		box := pterm.DefaultBox.WithLeftPadding(5).WithRightPadding(5).WithBottomPadding(3).WithTopPadding(3).Sprint(text)
 
-		// Center the box
-		pterm.DefaultCenter.Println(box)
+		// Display the box
+		pterm.Println(box)
 
 		// Show available commands
 		cmd.Help()
