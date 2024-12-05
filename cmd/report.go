@@ -4,7 +4,6 @@ import (
 	"github.com/cli/go-gh"
 	"github.com/pterm/pterm"
 	"github.com/spf13/cobra"
-	"github.com/ssulei7/gh-dormant-users/config"
 	"github.com/ssulei7/gh-dormant-users/internal/activity"
 	dateUtil "github.com/ssulei7/gh-dormant-users/internal/date"
 	"github.com/ssulei7/gh-dormant-users/internal/repository"
@@ -22,7 +21,6 @@ func generateDormantUserReport(cmd *cobra.Command, args []string) {
 	orgName, _ := cmd.Flags().GetString("org-name")
 	email, _ := cmd.Flags().GetBool("email")
 	date, _ := cmd.Flags().GetString("date")
-	config.Verbose = cmd.Flags().Changed("verbose")
 	client, err := gh.RESTClient(nil)
 	if err != nil {
 		pterm.Fatal.PrintOnErrorf("Failed to create REST client: %v", err)
