@@ -3,11 +3,10 @@ package issues
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"strings"
 
 	"github.com/cli/go-gh/pkg/api"
-	"github.com/ssulei7/gh-dormant-users/config"
+	"github.com/pterm/pterm"
 	"github.com/ssulei7/gh-dormant-users/internal/header"
 	"github.com/ssulei7/gh-dormant-users/internal/limiter"
 )
@@ -43,10 +42,8 @@ func GetIssuesSinceDate(organization string, repo string, date string, client ap
 		response, err := client.Request("GET", url, nil)
 		if err != nil {
 			if strings.Contains(err.Error(), "Git Repository is empty.") {
-				log.Printf("Repository %s is empty", repo)
 				break
 			} else {
-				log.Printf("Failed to fetch issues: %v", err)
 				return nil
 			}
 		}
@@ -56,7 +53,7 @@ func GetIssuesSinceDate(organization string, repo string, date string, client ap
 		decoder := json.NewDecoder(response.Body)
 		err = decoder.Decode(&issues)
 		if err != nil {
-			log.Fatalf("Failed to decode issues: %v", err)
+			pterm.Fatal.Printf("Failed to decode issues: %v", err)
 		}
 
 		allIssues = append(allIssues, issues...)
@@ -64,15 +61,11 @@ func GetIssuesSinceDate(organization string, repo string, date string, client ap
 		// Check for the 'Link' header to see if there are more pages
 		linkHeader := response.Header.Get("Link")
 		if linkHeader == "" {
-			if config.Verbose {
-				log.Printf("No more pages to fetch")
-			}
 			break
 		}
 
 		nextURL := header.GetNextPageURL(linkHeader)
 		if nextURL == "" {
-			log.Printf("No next page URL found")
 			break
 		}
 
@@ -91,10 +84,8 @@ func GetIssueCommentsSinceDate(organization string, repo string, date string, cl
 		response, err := client.Request("GET", url, nil)
 		if err != nil {
 			if strings.Contains(err.Error(), "Git Repository is empty.") {
-				log.Printf("Repository %s is empty", repo)
 				break
 			} else {
-				log.Printf("Failed to fetch issues: %v", err)
 				return nil
 			}
 		}
@@ -104,7 +95,7 @@ func GetIssueCommentsSinceDate(organization string, repo string, date string, cl
 		decoder := json.NewDecoder(response.Body)
 		err = decoder.Decode(&issueComments)
 		if err != nil {
-			log.Fatalf("Failed to decode issues: %v", err)
+			pterm.Fatal.Printf("Failed to decode issues: %v", err)
 		}
 
 		allIssueComments = append(allIssueComments, issueComments...)
@@ -112,15 +103,11 @@ func GetIssueCommentsSinceDate(organization string, repo string, date string, cl
 		// Check for the 'Link' header to see if there are more pages
 		linkHeader := response.Header.Get("Link")
 		if linkHeader == "" {
-			if config.Verbose {
-				log.Printf("No more pages to fetch")
-			}
 			break
 		}
 
 		nextURL := header.GetNextPageURL(linkHeader)
 		if nextURL == "" {
-			log.Printf("No next page URL found")
 			break
 		}
 

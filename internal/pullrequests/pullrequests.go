@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/cli/go-gh/pkg/api"
-	"github.com/ssulei7/gh-dormant-users/config"
 	"github.com/ssulei7/gh-dormant-users/internal/header"
 	"github.com/ssulei7/gh-dormant-users/internal/limiter"
 )
@@ -53,9 +52,6 @@ func GetPullRequestCommentsSinceDate(organization string, repo string, date stri
 		// Check for the 'Link' header to see if there are more pages
 		linkHeader := response.Header.Get("Link")
 		if linkHeader == "" {
-			if config.Verbose {
-				log.Printf("No more pages to fetch")
-			}
 			break
 		}
 
