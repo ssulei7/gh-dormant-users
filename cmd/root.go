@@ -29,7 +29,6 @@ func init() {
 	reportCmd.Flags().String("org-name", "", "The name of the organization to report upon")
 	reportCmd.Flags().BoolP("email", "e", false, "Check if user has an email")
 	reportCmd.Flags().String("date", "", "The date from which to start looking for activity. Max 3 months in the past.")
-	reportCmd.Flags().BoolP("verbose", "v", false, "Enable verbose logging")
 	if err := reportCmd.MarkFlagRequired("org-name"); err != nil {
 		log.Fatal(err)
 	}
