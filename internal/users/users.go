@@ -7,7 +7,6 @@ import (
 	"github.com/cli/go-gh"
 	"github.com/cli/go-gh/pkg/api"
 	"github.com/pterm/pterm"
-	"github.com/ssulei7/gh-dormant-users/config"
 	"github.com/ssulei7/gh-dormant-users/internal/header"
 	"github.com/ssulei7/gh-dormant-users/internal/limiter"
 )
@@ -30,9 +29,6 @@ func GetOrganizationUsers(organization string, email bool, client api.RESTClient
 
 	url := fmt.Sprintf("orgs/%s/members?per_page=100", organization)
 	for {
-		if config.Verbose {
-			pterm.Debug.Printf("Fetching users from URL: %s", url)
-		}
 		response, err := client.Request("GET", url, nil)
 		if err != nil {
 			spinner.Fail("Failed to fetch users")
@@ -47,10 +43,6 @@ func GetOrganizationUsers(organization string, email bool, client api.RESTClient
 			pterm.PrintOnErrorf("Failed to decode users: %v\n", err)
 		}
 
-		if config.Verbose {
-			pterm.Info.Printf("Fetched %d users\n", len(users))
-		}
-
 		// get user emails sequentially
 		if email {
 			getUserEmails(users)
@@ -60,18 +52,11 @@ func GetOrganizationUsers(organization string, email bool, client api.RESTClient
 		// Check for the 'Link' header to see if there are more pages
 		linkHeader := response.Header.Get("Link")
 		if linkHeader == "" {
-			if config.Verbose {
-				pterm.Info.Printf("No more pages to fetch")
-			}
 			break
 		}
 
 		nextURL := header.GetNextPageURL(linkHeader)
 		if nextURL == "" {
-			if config.Verbose {
-				pterm.Info.Printf("No next page URL found\n")
-			}
-
 			break
 		}
 
