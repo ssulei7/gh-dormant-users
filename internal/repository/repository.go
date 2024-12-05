@@ -8,7 +8,6 @@ import (
 
 	"github.com/cli/go-gh/pkg/api"
 	"github.com/pterm/pterm"
-	"github.com/ssulei7/gh-dormant-users/config"
 	"github.com/ssulei7/gh-dormant-users/internal/header"
 )
 
@@ -26,9 +25,6 @@ func GetOrgRepositories(organization string, client api.RESTClient) Repositories
 
 	url := fmt.Sprintf("orgs/%s/repos?per_page=100", organization)
 	for {
-		if config.Verbose {
-			pterm.Debug.Printf("Fetching repositories from URL: %s", url)
-		}
 		var response *http.Response
 		var err error
 		for retries := 0; retries < 5; retries++ {
@@ -58,17 +54,11 @@ func GetOrgRepositories(organization string, client api.RESTClient) Repositories
 		// Check for the 'Link' header to see if there are more pages
 		linkHeader := response.Header.Get("Link")
 		if linkHeader == "" {
-			if config.Verbose {
-				pterm.Debug.Printf("No more pages to fetch")
-			}
 			break
 		}
 
 		nextURL := header.GetNextPageURL(linkHeader)
 		if nextURL == "" {
-			if config.Verbose {
-				pterm.Debug.Printf("No more pages to fetch")
-			}
 			break
 		}
 
