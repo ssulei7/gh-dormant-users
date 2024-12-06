@@ -3,11 +3,10 @@ package commits
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"strings"
 
 	"github.com/cli/go-gh/pkg/api"
-	"github.com/ssulei7/gh-dormant-users/config"
+	"github.com/pterm/pterm"
 	"github.com/ssulei7/gh-dormant-users/internal/header"
 	"github.com/ssulei7/gh-dormant-users/internal/limiter"
 )
@@ -37,10 +36,8 @@ func GetCommitsSinceDate(organization string, repository string, date string, cl
 		response, err := client.Request("GET", url, nil)
 		if err != nil {
 			if strings.Contains(err.Error(), "Git Repository is empty.") {
-				log.Printf("Repository %s is empty", repository)
 				break
 			} else {
-				log.Printf("Failed to fetch commits: %v", err)
 				return nil
 			}
 		}
@@ -50,7 +47,7 @@ func GetCommitsSinceDate(organization string, repository string, date string, cl
 
 		err = decoder.Decode(&commits)
 		if err != nil {
-			log.Fatalf("Failed to decode commits: %v", err)
+			pterm.Fatal.Printf("Failed to decode commits: %v", err)
 		}
 
 		allCommits = append(allCommits, commits...)
@@ -58,15 +55,11 @@ func GetCommitsSinceDate(organization string, repository string, date string, cl
 		// Check for the 'Link' header to see if there are more pages
 		linkHeader := response.Header.Get("Link")
 		if linkHeader == "" {
-			if config.Verbose {
-				log.Printf("No more pages to fetch")
-			}
 			break
 		}
 
 		nextURL := header.GetNextPageURL(linkHeader)
 		if nextURL == "" {
-			log.Printf("No next page URL found")
 			break
 		}
 

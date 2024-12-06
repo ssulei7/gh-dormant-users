@@ -21,8 +21,7 @@ Flags:
   -e, --email             Check if user has an email 
   -h, --help              help for report
     --org-name string   The name of the organization to report upon (required)
-  -v, --verbose           Enable verbose logging
-  ```
+```
 
 ## Example
 

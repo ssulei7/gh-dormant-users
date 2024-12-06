@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/cli/go-gh/pkg/api"
+	"github.com/pterm/pterm"
 	"github.com/ssulei7/gh-dormant-users/internal/commits"
 	"github.com/ssulei7/gh-dormant-users/internal/issues"
 	"github.com/ssulei7/gh-dormant-users/internal/pullrequests"
@@ -23,6 +24,9 @@ func init() {
 }
 
 func CheckActivity(users users.Users, organization string, repositories repository.Repositories, date string, client api.RESTClient) {
+	for _, user := range users {
+		activeUsers[user.Login] = false
+	}
 	commitActivity(users, organization, repositories, date, client)
 	issueActivity(users, organization, repositories, date, client)
 	issueCommentActivity(users, organization, repositories, date, client)
@@ -30,10 +34,11 @@ func CheckActivity(users users.Users, organization string, repositories reposito
 }
 
 func commitActivity(usersList users.Users, organization string, repositories repository.Repositories, date string, client api.RESTClient) {
-	log.Default().Println("Checking for commit activity in organization: " + organization)
+	commitProgressBar, _ := pterm.DefaultProgressbar.WithTotal(len(repositories)).WithTitle("Checking for commit activity...").Start()
+	defer commitProgressBar.Stop()
 	for _, repo := range repositories {
-		log.Default().Println("Checking for commit activity in repository: " + repo.Name)
 		commits := commits.GetCommitsSinceDate(organization, repo.Name, date, client)
+		commitProgressBar.Increment()
 		if len(commits) == 0 {
 			continue
 		}
@@ -48,7 +53,27 @@ func commitActivity(usersList users.Users, organization string, repositories rep
 				}
 			}
 		}
+		commitProgressBar.Increment()
 	}
+}
+
+func GenerateBarChartOfActiveUsers() {
+	activeCount := 0
+	inactiveCount := 0
+	for _, active := range activeUsers {
+		if active {
+			activeCount++
+		} else {
+			inactiveCount++
+		}
+	}
+
+	activeInactiveBars := []pterm.Bar{
+		{Label: "Active", Value: activeCount},
+		{Label: "Inactive", Value: inactiveCount},
+	}
+
+	pterm.DefaultBarChart.WithBars(activeInactiveBars).WithShowValue().Render()
 }
 
 func GenerateUserReportCSV(users users.Users, filePath string) error {
@@ -78,9 +103,10 @@ func GenerateUserReportCSV(users users.Users, filePath string) error {
 }
 
 func issueActivity(users users.Users, organization string, repositories repository.Repositories, date string, client api.RESTClient) {
-	log.Default().Println("Checking for issue activity in organization: " + organization)
+	issueActivityProgressBar, _ := pterm.DefaultProgressbar.WithTotal(len(repositories)).WithTitle("Checking for issue activity...").Start()
+	defer issueActivityProgressBar.Stop()
 	for _, repo := range repositories {
-		log.Default().Println("Checking for issue activity in repository: " + repo.Name)
+		issueActivityProgressBar.Increment()
 		issues := issues.GetIssuesSinceDate(organization, repo.Name, date, client)
 		if len(issues) == 0 {
 			continue
@@ -100,9 +126,10 @@ func issueActivity(users users.Users, organization string, repositories reposito
 }
 
 func issueCommentActivity(users users.Users, organization string, repositories repository.Repositories, date string, client api.RESTClient) {
-	log.Default().Println("Checking for issue comment activity in organization: " + organization)
+	issueCommentProgressBar, _ := pterm.DefaultProgressbar.WithTotal(len(repositories)).WithTitle("Checking for issue comment activity...").Start()
+	defer issueCommentProgressBar.Stop()
 	for _, repo := range repositories {
-		log.Default().Println("Checking for issue comment activity in repository: " + repo.Name)
+		issueCommentProgressBar.Increment()
 		issueComments := issues.GetIssueCommentsSinceDate(organization, repo.Name, date, client)
 		if len(issueComments) == 0 {
 			continue
@@ -122,9 +149,10 @@ func issueCommentActivity(users users.Users, organization string, repositories r
 }
 
 func pullRequestCommentActivity(users users.Users, organization string, repositories repository.Repositories, date string, client api.RESTClient) {
-	log.Default().Println("Checking for pull request comment activity in organization: " + organization)
+	pullRequestCommentProgressBar, _ := pterm.DefaultProgressbar.WithTotal(len(repositories)).WithTitle("Checking for pull request comment activity...").Start()
+	defer pullRequestCommentProgressBar.Stop()
 	for _, repo := range repositories {
-		log.Default().Println("Checking for pull request comment activity in repository: " + repo.Name)
+		pullRequestCommentProgressBar.Increment()
 		pullRequestComments := pullrequests.GetPullRequestCommentsSinceDate(organization, repo.Name, date, client)
 		if len(pullRequestComments) == 0 {
 			continue
