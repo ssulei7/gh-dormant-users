@@ -38,6 +38,8 @@ func generateDormantUserReport(cmd *cobra.Command, args []string) {
 
 	repositories := repository.GetOrgRepositories(orgName, client)
 
+	activityTypes, _ := cmd.Flags().GetStringSlice("activity-types")
+
 	// Now, check for activity in the organization's repositories
 	box := pterm.DefaultBox.WithTitle("Organization Info").
 		WithLeftPadding(1).
@@ -46,7 +48,7 @@ func generateDormantUserReport(cmd *cobra.Command, args []string) {
 		WithTopPadding(1)
 	box.Printfln("Number of users: %v\nNumber of repositories: %v", len(users), len(repositories))
 	pterm.Info.Println("Checking for activity...")
-	activity.CheckActivity(users, orgName, repositories, isoDate, client)
+	activity.CheckActivity(users, orgName, repositories, isoDate, client, activityTypes)
 	activity.GenerateBarChartOfActiveUsers()
 	activity.GenerateUserReportCSV(users, orgName+"-dormant-users.csv")
 }
