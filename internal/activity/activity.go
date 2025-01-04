@@ -23,14 +23,22 @@ func init() {
 	activeUsers = make(map[string]bool)
 }
 
-func CheckActivity(users users.Users, organization string, repositories repository.Repositories, date string, client api.RESTClient) {
+func CheckActivity(users users.Users, organization string, repositories repository.Repositories, date string, client api.RESTClient, activityTypes []string) {
 	for _, user := range users {
 		activeUsers[user.Login] = false
 	}
-	commitActivity(users, organization, repositories, date, client)
-	issueActivity(users, organization, repositories, date, client)
-	issueCommentActivity(users, organization, repositories, date, client)
-	pullRequestCommentActivity(users, organization, repositories, date, client)
+	for _, activityType := range activityTypes {
+		switch activityType {
+		case "commits":
+			commitActivity(users, organization, repositories, date, client)
+		case "issues":
+			issueActivity(users, organization, repositories, date, client)
+		case "issue-comments":
+			issueCommentActivity(users, organization, repositories, date, client)
+		case "pr-comments":
+			pullRequestCommentActivity(users, organization, repositories, date, client)
+		}
+	}
 }
 
 func commitActivity(usersList users.Users, organization string, repositories repository.Repositories, date string, client api.RESTClient) {
