@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/cli/go-gh/pkg/api"
 	"github.com/pterm/pterm"
@@ -54,6 +55,7 @@ func commitActivity(usersList users.Users, organization string, repositories rep
 			for i := range usersList {
 				user := &usersList[i]
 				if commit.Author.Login == user.Login {
+					user.AddActivityType("commits")
 					if !user.Active && !activeUsers[user.Login] {
 						user.MakeActive()
 						activeUsers[user.Login] = true
@@ -95,13 +97,19 @@ func GenerateUserReportCSV(users users.Users, filePath string) error {
 	writer := csv.NewWriter(file)
 	defer writer.Flush()
 
-	header := []string{"Username", "Email", "Active"}
+	header := []string{"Username", "Email", "Active", "ActivityTypes"}
 	if err := writer.Write(header); err != nil {
 		return err
 	}
 
 	for _, user := range users {
-		record := []string{user.Login, user.Email, strconv.FormatBool(user.Active)}
+		var atSlice []string
+		if !user.Active {
+			atSlice = []string{"none"}
+		} else {
+			atSlice = user.GetActivityTypes()
+		}
+		record := []string{user.Login, user.Email, strconv.FormatBool(user.Active), strings.Join(atSlice, ",")}
 		if err := writer.Write(record); err != nil {
 			return err
 		}
@@ -123,6 +131,7 @@ func issueActivity(users users.Users, organization string, repositories reposito
 			for i := range users {
 				user := &users[i]
 				if issue.User.Login == user.Login {
+					user.AddActivityType("issues")
 					if !user.Active && !activeUsers[user.Login] {
 						user.MakeActive()
 						activeUsers[user.Login] = true
@@ -146,6 +155,7 @@ func issueCommentActivity(users users.Users, organization string, repositories r
 			for i := range users {
 				user := &users[i]
 				if issueComment.User.Login == user.Login {
+					user.AddActivityType("issue-comments")
 					if !user.Active && !activeUsers[user.Login] {
 						user.MakeActive()
 						activeUsers[user.Login] = true
@@ -169,6 +179,7 @@ func pullRequestCommentActivity(users users.Users, organization string, reposito
 			for i := range users {
 				user := &users[i]
 				if pullRequestComment.User.Login == user.Login {
+					user.AddActivityType("pr-comments")
 					if !user.Active && !activeUsers[user.Login] {
 						user.MakeActive()
 						activeUsers[user.Login] = true
