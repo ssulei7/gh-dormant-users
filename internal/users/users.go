@@ -12,10 +12,11 @@ import (
 )
 
 type User struct {
-	Login  string `json:"login"`
-	ID     int    `json:"id"`
-	Email  string `json:"email"`
-	Active bool
+	Login         string `json:"login"`
+	ID            int    `json:"id"`
+	Email         string `json:"email"`
+	Active        bool
+	ActivityTypes map[string]bool
 }
 
 type Users []User
@@ -74,6 +75,24 @@ func (u *User) MakeActive() {
 
 func (u *User) MakeInactive() {
 	u.Active = false
+}
+
+func (u *User) AddActivityType(t string) {
+	if u.ActivityTypes == nil {
+		u.ActivityTypes = make(map[string]bool)
+	}
+	u.ActivityTypes[t] = true
+}
+
+func (u *User) GetActivityTypes() []string {
+	if u.ActivityTypes == nil {
+		return nil
+	}
+	var atSlice []string
+	for t := range u.ActivityTypes {
+		atSlice = append(atSlice, t)
+	}
+	return atSlice
 }
 
 func getUserEmails(users Users) {

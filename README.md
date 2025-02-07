@@ -49,15 +49,16 @@ The tool generates a CSV report of dormant users and displays a bar chart of act
 
 The generated CSV file has the following schema:
 
-| Username | Email          | Active |
-|----------|----------------|--------|
-| user1    | user1@domain.com | true   |
-| user2    | user2@domain.com | false  |
-| ...      | ...            | ...    |
+| Username | Email            | Active | ActivityTypes  |
+|----------|------------------|--------|----------------|
+| user1    | user1@domain.com | true   | commits,issues |
+| user2    | user2@domain.com | false  | ...            |
+| ...      | ...              | ...    | ...            |
 
 - **Username**: The GitHub username of the user.
 - **Email**: The email address of the user (if available).
 - **Active**: A boolean value indicating whether the user is active or not.
+- **ActivityTypes**: A comma-separated list of activity types (commits, issues, issue-comments, pr-comments) for each user.
 
 ## Contributing
 
