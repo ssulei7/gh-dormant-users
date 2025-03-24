@@ -38,8 +38,8 @@ func GetIssuesSinceDate(organization string, repo string, date string, client ap
 	url := fmt.Sprintf("repos/%s/%s/issues?per_page=100&since=%s", organization, repo, date)
 	for {
 		limiter.AcquireConcurrentLimiter()
-		defer limiter.ReleaseConcurrentLimiter()
 		response, err := client.Request("GET", url, nil)
+		limiter.ReleaseConcurrentLimiter()
 		if err != nil {
 			if strings.Contains(err.Error(), "Git Repository is empty.") {
 				break
@@ -80,8 +80,8 @@ func GetIssueCommentsSinceDate(organization string, repo string, date string, cl
 	url := fmt.Sprintf("repos/%s/%s/issues/comments?per_page=100&since=%s", organization, repo, date)
 	for {
 		limiter.AcquireConcurrentLimiter()
-		defer limiter.ReleaseConcurrentLimiter()
 		response, err := client.Request("GET", url, nil)
+		limiter.ReleaseConcurrentLimiter()
 		if err != nil {
 			if strings.Contains(err.Error(), "Git Repository is empty.") {
 				break
