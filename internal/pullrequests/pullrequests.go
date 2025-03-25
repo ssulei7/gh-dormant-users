@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"strings"
+	"time"
 
 	"github.com/cli/go-gh/pkg/api"
 	"github.com/ssulei7/gh-dormant-users/internal/header"
@@ -27,8 +29,20 @@ func GetPullRequestCommentsSinceDate(organization string, repo string, date stri
 	url := fmt.Sprintf("repos/%s/%s/pulls/comments?per_page=100&since=%s", organization, repo, date)
 	for {
 		limiter.AcquireConcurrentLimiter()
-		defer limiter.ReleaseConcurrentLimiter()
-		response, err := client.Request("GET", url, nil)
+		var response *http.Response
+		var err error
+
+		// Retry logic for handling 502 errors
+		for retries := 0; retries < 5; retries++ {
+			response, err = client.Request("GET", url, nil)
+			if err == nil || !strings.Contains(err.Error(), "502") {
+				break
+			}
+			log.Printf("Received 502 error. Retrying in %d seconds...", (1 << retries))
+			time.Sleep(time.Duration(1<<retries) * time.Second)
+		}
+		limiter.ReleaseConcurrentLimiter()
+
 		if err != nil {
 			if strings.Contains(err.Error(), "Git Repository is empty.") {
 				log.Printf("Repository %s is empty", repo)
