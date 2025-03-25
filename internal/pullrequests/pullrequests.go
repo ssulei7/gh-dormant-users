@@ -27,8 +27,8 @@ func GetPullRequestCommentsSinceDate(organization string, repo string, date stri
 	url := fmt.Sprintf("repos/%s/%s/pulls/comments?per_page=100&since=%s", organization, repo, date)
 	for {
 		limiter.AcquireConcurrentLimiter()
-		defer limiter.ReleaseConcurrentLimiter()
 		response, err := client.Request("GET", url, nil)
+		limiter.ReleaseConcurrentLimiter()
 		if err != nil {
 			if strings.Contains(err.Error(), "Git Repository is empty.") {
 				log.Printf("Repository %s is empty", repo)

@@ -32,8 +32,8 @@ func GetCommitsSinceDate(organization string, repository string, date string, cl
 	url := fmt.Sprintf("repos/%s/%s/commits?per_page=100&since=%s", organization, repository, date)
 	for {
 		limiter.AcquireConcurrentLimiter()
-		defer limiter.ReleaseConcurrentLimiter()
 		response, err := client.Request("GET", url, nil)
+		limiter.ReleaseConcurrentLimiter()
 		if err != nil {
 			if strings.Contains(err.Error(), "Git Repository is empty.") {
 				break

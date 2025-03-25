@@ -104,9 +104,9 @@ func getUserEmails(users Users) {
 
 	for index := range users {
 		limiter.AcquireConcurrentLimiter()
-		defer limiter.ReleaseConcurrentLimiter()
 		url := fmt.Sprintf("users/%s", users[index].Login)
 		response, err := client.Request("GET", url, nil)
+		limiter.ReleaseConcurrentLimiter()
 		if err != nil {
 			pterm.Info.Printf("Failed to fetch user details: %v\n", err)
 			continue
