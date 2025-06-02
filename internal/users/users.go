@@ -22,13 +22,22 @@ type User struct {
 type Users []User
 
 func GetOrganizationUsers(organization string, email bool, client api.RESTClient) Users {
-	pterm.Info.Printf("Starting to fetch users for organization: %s\n", organization)
+	pterm.Info.Printf("Starting to fetch members for organization: %s\n", organization)
+    return GetUsers(organization, "orgs/%s/members?per_page=100", email, client)
+}
+
+func GetOrganizationOutsideCollaborators(organization string, email bool, client api.RESTClient) Users {
+	pterm.Info.Printf("Starting to fetch outside collaborators for organization: %s\n", organization)
+    return GetUsers(organization, "orgs/%s/outside_collaborators?per_page=100", email, client)
+}
+
+func GetUsers(organization string, endpoint string, email bool, client api.RESTClient) Users {
 	var allUsers Users
 
 	// Start the spinner
 	spinner, _ := pterm.DefaultSpinner.Start("Fetching users...")
 
-	url := fmt.Sprintf("orgs/%s/members?per_page=100", organization)
+	url := fmt.Sprintf(endpoint, organization)
 	for {
 		response, err := client.Request("GET", url, nil)
 		if err != nil {

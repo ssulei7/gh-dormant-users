@@ -20,6 +20,7 @@ func generateDormantUserReport(cmd *cobra.Command, args []string) {
 	// First, get all users in an orgainzation using the gh module
 	orgName, _ := cmd.Flags().GetString("org-name")
 	email, _ := cmd.Flags().GetBool("email")
+	fetchOutsideCollaborators, _ := cmd.Flags().GetBool("outside-collaborators")
 	date, _ := cmd.Flags().GetString("date")
 	client, err := gh.RESTClient(nil)
 	if err != nil {
@@ -34,7 +35,12 @@ func generateDormantUserReport(cmd *cobra.Command, args []string) {
 
 	// Convert date to iso 8601 format
 	isoDate := dateUtil.GetISODate(date)
-	users := users.GetOrganizationUsers(orgName, email, client)
+	usersList := users.GetOrganizationUsers(orgName, email, client)
+	// If the user has requested outside collaborators, fetch them
+	if fetchOutsideCollaborators {
+        outsideCollaborators := users.GetOrganizationOutsideCollaborators(orgName, email, client)
+        usersList = append(usersList, outsideCollaborators...)
+	}
 
 	repositories := repository.GetOrgRepositories(orgName, client)
 
@@ -46,9 +52,9 @@ func generateDormantUserReport(cmd *cobra.Command, args []string) {
 		WithRightPadding(1).
 		WithBottomPadding(1).
 		WithTopPadding(1)
-	box.Printfln("Number of users: %v\nNumber of repositories: %v", len(users), len(repositories))
+	box.Printfln("Number of users: %v\nNumber of repositories: %v", len(usersList), len(repositories))
 	pterm.Info.Println("Checking for activity...")
-	activity.CheckActivity(users, orgName, repositories, isoDate, client, activityTypes)
+	activity.CheckActivity(usersList, orgName, repositories, isoDate, client, activityTypes)
 	activity.GenerateBarChartOfActiveUsers()
-	activity.GenerateUserReportCSV(users, orgName+"-dormant-users.csv")
+	activity.GenerateUserReportCSV(usersList, orgName+"-dormant-users.csv")
 }
