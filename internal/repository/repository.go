@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/cli/go-gh/pkg/api"
@@ -32,12 +31,6 @@ func GetOrgRepositories(organization string, client api.RESTClient) Repositories
 		for retries := 0; retries < 5; retries++ {
 			response, err = client.Request("GET", url, nil)
 			if err != nil {
-				// Check if it's a rate limit error
-				if strings.Contains(err.Error(), "rate limit") || strings.Contains(err.Error(), "403") {
-					pterm.Warning.Printf("Rate limit detected: %v. Retrying in %d seconds...\n", err, (1 << retries))
-					time.Sleep(time.Duration(1<<retries) * time.Second)
-					continue
-				}
 				pterm.Warning.Printf("Failed to fetch repositories: %v. Retrying in %d seconds...\n", err, (1 << retries))
 				time.Sleep(time.Duration(1<<retries) * time.Second)
 				continue
