@@ -2,7 +2,6 @@ package activity
 
 import (
 	"encoding/csv"
-	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -87,7 +86,7 @@ func GenerateBarChartOfActiveUsers() {
 }
 
 func GenerateUserReportCSV(users users.Users, filePath string) error {
-	log.Default().Println("Generating CSV report: " + filePath)
+	pterm.Info.Printf("Generating CSV report: %s\n", filePath)
 	file, err := os.Create(filePath)
 	if err != nil {
 		return err

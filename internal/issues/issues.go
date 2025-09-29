@@ -48,12 +48,15 @@ func GetIssuesSinceDate(organization string, repo string, date string, client ap
 			}
 		}
 
+		// Check and handle rate limits
+		limiter.CheckAndHandleRateLimit(response)
+
 		var issues Issues
 
 		decoder := json.NewDecoder(response.Body)
 		err = decoder.Decode(&issues)
 		if err != nil {
-			pterm.Fatal.Printf("Failed to decode issues: %v", err)
+			pterm.Fatal.Printf("Failed to decode issues: %v\n", err)
 		}
 
 		allIssues = append(allIssues, issues...)
@@ -90,12 +93,15 @@ func GetIssueCommentsSinceDate(organization string, repo string, date string, cl
 			}
 		}
 
+		// Check and handle rate limits
+		limiter.CheckAndHandleRateLimit(response)
+
 		var issueComments IssueComments
 
 		decoder := json.NewDecoder(response.Body)
 		err = decoder.Decode(&issueComments)
 		if err != nil {
-			pterm.Fatal.Printf("Failed to decode issues: %v", err)
+			pterm.Fatal.Printf("Failed to decode issues: %v\n", err)
 		}
 
 		allIssueComments = append(allIssueComments, issueComments...)

@@ -4,11 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/cli/go-gh/pkg/api"
 	"github.com/pterm/pterm"
 	"github.com/ssulei7/gh-dormant-users/internal/header"
+	"github.com/ssulei7/gh-dormant-users/internal/limiter"
 )
 
 type Repository struct {
@@ -30,15 +32,23 @@ func GetOrgRepositories(organization string, client api.RESTClient) Repositories
 		for retries := 0; retries < 5; retries++ {
 			response, err = client.Request("GET", url, nil)
 			if err != nil {
-				pterm.Info.Printf("Failed to fetch repositories: %v. Retrying in %d seconds...", err, (1 << retries))
+				// Check if it's a rate limit error
+				if strings.Contains(err.Error(), "rate limit") || strings.Contains(err.Error(), "403") {
+					pterm.Warning.Printf("Rate limit detected: %v. Retrying in %d seconds...\n", err, (1 << retries))
+					time.Sleep(time.Duration(1<<retries) * time.Second)
+					continue
+				}
+				pterm.Warning.Printf("Failed to fetch repositories: %v. Retrying in %d seconds...\n", err, (1 << retries))
 				time.Sleep(time.Duration(1<<retries) * time.Second)
 				continue
 			}
+			// Check and handle rate limits from headers
+			limiter.CheckAndHandleRateLimit(response)
 			break
 		}
 		if err != nil {
 			spinner.Fail("Failed to fetch repositories after retries")
-			pterm.Fatal.PrintOnErrorf("Failed to fetch repositories after retries: %v", err)
+			pterm.Fatal.Printf("Failed to fetch repositories after retries: %v\n", err)
 		}
 
 		var repositories Repositories
@@ -46,7 +56,7 @@ func GetOrgRepositories(organization string, client api.RESTClient) Repositories
 		err = decoder.Decode(&repositories)
 		if err != nil {
 			spinner.Fail("Failed to decode repositories")
-			pterm.Fatal.Printf("Failed to decode repositories: %v", err)
+			pterm.Fatal.Printf("Failed to decode repositories: %v\n", err)
 		}
 
 		allRepositories = append(allRepositories, repositories...)
