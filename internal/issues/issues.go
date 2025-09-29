@@ -103,7 +103,7 @@ func GetIssueCommentsSinceDate(organization string, repo string, date string, cl
 		decoder := json.NewDecoder(response.Body)
 		err = decoder.Decode(&issueComments)
 		if err != nil {
-			pterm.Fatal.Printf("Failed to decode issues: %v\n", err)
+			pterm.Fatal.Printf("Failed to decode issue comments: %v\n", err)
 		}
 
 		allIssueComments = append(allIssueComments, issueComments...)
