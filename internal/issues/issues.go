@@ -42,6 +42,7 @@ func GetIssuesSinceDate(organization string, repo string, date string, client ap
 		limiter.ReleaseConcurrentLimiter()
 		if err != nil {
 			if strings.Contains(err.Error(), "Git Repository is empty.") {
+				// Empty repositories are expected, exit gracefully
 				break
 			} else {
 				return nil
@@ -87,6 +88,7 @@ func GetIssueCommentsSinceDate(organization string, repo string, date string, cl
 		limiter.ReleaseConcurrentLimiter()
 		if err != nil {
 			if strings.Contains(err.Error(), "Git Repository is empty.") {
+				// Empty repositories are expected, exit gracefully
 				break
 			} else {
 				return nil

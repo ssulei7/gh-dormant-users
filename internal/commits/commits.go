@@ -36,6 +36,7 @@ func GetCommitsSinceDate(organization string, repository string, date string, cl
 		limiter.ReleaseConcurrentLimiter()
 		if err != nil {
 			if strings.Contains(err.Error(), "Git Repository is empty.") {
+				// Empty repositories are expected, exit gracefully
 				break
 			} else {
 				return nil
