@@ -31,10 +31,8 @@ func GetPullRequestCommentsSinceDate(organization string, repo string, date stri
 		limiter.ReleaseConcurrentLimiter()
 		if err != nil {
 			if strings.Contains(err.Error(), "Git Repository is empty.") {
-				pterm.Debug.Printf("Repository %s is empty\n", repo)
 				break
 			} else {
-				pterm.Warning.Printf("Failed to fetch pull request comments: %v\n", err)
 				return nil
 			}
 		}
