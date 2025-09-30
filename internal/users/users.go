@@ -3,6 +3,7 @@ package users
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 
 	"github.com/cli/go-gh"
 	"github.com/cli/go-gh/pkg/api"
@@ -33,7 +34,8 @@ func GetOrganizationUsers(organization string, email bool, client api.RESTClient
 		response, err := client.Request("GET", url, nil)
 		if err != nil {
 			spinner.Fail("Failed to fetch users")
-			pterm.Fatal.PrintOnErrorf("Failed to fetch users: %v", err)
+			pterm.Error.Printf("Failed to fetch users: %v\n", err)
+			os.Exit(1)
 		}
 
 		var users Users
@@ -99,7 +101,8 @@ func getUserEmails(users Users) {
 	pterm.Info.Println("Getting user emails, if present")
 	client, err := gh.RESTClient(nil)
 	if err != nil {
-		pterm.Fatal.PrintOnErrorf("Failed to create REST client: %v", err)
+		pterm.Error.Printf("Failed to create REST client: %v\n", err)
+		os.Exit(1)
 	}
 
 	for index := range users {
@@ -116,8 +119,8 @@ func getUserEmails(users Users) {
 		decoder := json.NewDecoder(response.Body)
 		err = decoder.Decode(&userDetails)
 		if err != nil {
-			pterm.Fatal.PrintOnErrorf("Failed to decode user details: %v\n", err)
-			continue
+			pterm.Error.Printf("Failed to decode user details: %v\n", err)
+			os.Exit(1)
 		}
 
 		users[index].Email = userDetails.Email

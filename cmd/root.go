@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"os"
+
 	"github.com/pterm/pterm"
 	"github.com/spf13/cobra"
 )
@@ -29,10 +31,12 @@ func init() {
 	reportCmd.Flags().String("date", "", "The date from which to start looking for activity. Max 3 months in the past.")
 	reportCmd.Flags().StringSlice("activity-types", []string{"commits", "issues", "issue-comments", "pr-comments"}, "Comma-separated list of activity types to check (commits, issues, issue-comments, pr-comments)")
 	if err := reportCmd.MarkFlagRequired("org-name"); err != nil {
-		pterm.Fatal.PrintOnError(err)
+		pterm.Error.PrintOnError(err)
+		os.Exit(1)
 	}
 	if err := reportCmd.MarkFlagRequired("date"); err != nil {
-		pterm.Fatal.PrintOnError(err)
+		pterm.Error.PrintOnError(err)
+		os.Exit(1)
 	}
 	rootCmd.AddCommand(reportCmd)
 	rootCmd.CompletionOptions.DisableDefaultCmd = true
@@ -40,6 +44,7 @@ func init() {
 
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
-		pterm.Fatal.PrintOnError(err)
+		pterm.Error.PrintOnError(err)
+		os.Exit(1)
 	}
 }

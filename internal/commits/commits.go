@@ -3,6 +3,7 @@ package commits
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/cli/go-gh/pkg/api"
@@ -51,7 +52,8 @@ func GetCommitsSinceDate(organization string, repository string, date string, cl
 
 		err = decoder.Decode(&commits)
 		if err != nil {
-			pterm.Fatal.Printf("Failed to decode commits: %v\n", err)
+			pterm.Error.Printf("Failed to decode commits: %v\n", err)
+			os.Exit(1)
 		}
 
 		allCommits = append(allCommits, commits...)

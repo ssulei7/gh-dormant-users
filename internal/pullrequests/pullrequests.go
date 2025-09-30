@@ -3,6 +3,7 @@ package pullrequests
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/cli/go-gh/pkg/api"
@@ -46,7 +47,8 @@ func GetPullRequestCommentsSinceDate(organization string, repo string, date stri
 		decoder := json.NewDecoder(response.Body)
 		err = decoder.Decode(&pullRequestComments)
 		if err != nil {
-			pterm.Fatal.Printf("Failed to decode pull request comments: %v\n", err)
+			pterm.Error.Printf("Failed to decode pull request comments: %v\n", err)
+			os.Exit(1)
 		}
 
 		allPullRequestComments = append(allPullRequestComments, pullRequestComments...)

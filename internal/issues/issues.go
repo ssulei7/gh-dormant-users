@@ -3,6 +3,7 @@ package issues
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/cli/go-gh/pkg/api"
@@ -57,7 +58,8 @@ func GetIssuesSinceDate(organization string, repo string, date string, client ap
 		decoder := json.NewDecoder(response.Body)
 		err = decoder.Decode(&issues)
 		if err != nil {
-			pterm.Fatal.Printf("Failed to decode issues: %v\n", err)
+			pterm.Error.Printf("Failed to decode issues: %v\n", err)
+			os.Exit(1)
 		}
 
 		allIssues = append(allIssues, issues...)
@@ -103,7 +105,8 @@ func GetIssueCommentsSinceDate(organization string, repo string, date string, cl
 		decoder := json.NewDecoder(response.Body)
 		err = decoder.Decode(&issueComments)
 		if err != nil {
-			pterm.Fatal.Printf("Failed to decode issue comments: %v\n", err)
+			pterm.Error.Printf("Failed to decode issue comments: %v\n", err)
+			os.Exit(1)
 		}
 
 		allIssueComments = append(allIssueComments, issueComments...)

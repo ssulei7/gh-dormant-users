@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/cli/go-gh/pkg/api"
@@ -41,7 +42,8 @@ func GetOrgRepositories(organization string, client api.RESTClient) Repositories
 		}
 		if err != nil {
 			spinner.Fail("Failed to fetch repositories after retries")
-			pterm.Fatal.Printf("Failed to fetch repositories after retries: %v\n", err)
+			pterm.Error.Printf("Failed to fetch repositories after retries: %v\n", err)
+			os.Exit(1)
 		}
 
 		var repositories Repositories
@@ -49,7 +51,8 @@ func GetOrgRepositories(organization string, client api.RESTClient) Repositories
 		err = decoder.Decode(&repositories)
 		if err != nil {
 			spinner.Fail("Failed to decode repositories")
-			pterm.Fatal.Printf("Failed to decode repositories: %v\n", err)
+			pterm.Error.Printf("Failed to decode repositories: %v\n", err)
+			os.Exit(1)
 		}
 
 		allRepositories = append(allRepositories, repositories...)
