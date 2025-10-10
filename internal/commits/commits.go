@@ -3,6 +3,7 @@ package commits
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/cli/go-gh/pkg/api"
@@ -36,18 +37,23 @@ func GetCommitsSinceDate(organization string, repository string, date string, cl
 		limiter.ReleaseConcurrentLimiter()
 		if err != nil {
 			if strings.Contains(err.Error(), "Git Repository is empty.") {
+				// Empty repositories are expected, exit gracefully
 				break
 			} else {
 				return nil
 			}
 		}
 
+		// Check and handle rate limits
+		limiter.CheckAndHandleRateLimit(response)
+
 		var commits Commits
 		decoder := json.NewDecoder(response.Body)
 
 		err = decoder.Decode(&commits)
 		if err != nil {
-			pterm.Fatal.Printf("Failed to decode commits: %v", err)
+			pterm.Error.Printf("Failed to decode commits: %v\n", err)
+			os.Exit(1)
 		}
 
 		allCommits = append(allCommits, commits...)

@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"os"
+
 	"github.com/cli/go-gh"
 	"github.com/pterm/pterm"
 	"github.com/spf13/cobra"
@@ -23,13 +25,15 @@ func generateDormantUserReport(cmd *cobra.Command, args []string) {
 	date, _ := cmd.Flags().GetString("date")
 	client, err := gh.RESTClient(nil)
 	if err != nil {
-		pterm.Fatal.PrintOnErrorf("Failed to create REST client: %v", err)
+		pterm.Error.Printf("Failed to create REST client: %v\n", err)
+		os.Exit(1)
 	}
 
 	// Validate date is no longer than 3 months, and turn into an ISO string
 	isDateValid := dateUtil.ValidateDate(date)
 	if !isDateValid {
-		pterm.Fatal.Println("Date must be within the last 3 months")
+		pterm.Error.Println("Date must be within the last 3 months")
+		os.Exit(1)
 	}
 
 	// Convert date to iso 8601 format

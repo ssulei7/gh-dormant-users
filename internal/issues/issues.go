@@ -3,6 +3,7 @@ package issues
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/cli/go-gh/pkg/api"
@@ -42,18 +43,23 @@ func GetIssuesSinceDate(organization string, repo string, date string, client ap
 		limiter.ReleaseConcurrentLimiter()
 		if err != nil {
 			if strings.Contains(err.Error(), "Git Repository is empty.") {
+				// Empty repositories are expected, exit gracefully
 				break
 			} else {
 				return nil
 			}
 		}
 
+		// Check and handle rate limits
+		limiter.CheckAndHandleRateLimit(response)
+
 		var issues Issues
 
 		decoder := json.NewDecoder(response.Body)
 		err = decoder.Decode(&issues)
 		if err != nil {
-			pterm.Fatal.Printf("Failed to decode issues: %v", err)
+			pterm.Error.Printf("Failed to decode issues: %v\n", err)
+			os.Exit(1)
 		}
 
 		allIssues = append(allIssues, issues...)
@@ -84,18 +90,23 @@ func GetIssueCommentsSinceDate(organization string, repo string, date string, cl
 		limiter.ReleaseConcurrentLimiter()
 		if err != nil {
 			if strings.Contains(err.Error(), "Git Repository is empty.") {
+				// Empty repositories are expected, exit gracefully
 				break
 			} else {
 				return nil
 			}
 		}
 
+		// Check and handle rate limits
+		limiter.CheckAndHandleRateLimit(response)
+
 		var issueComments IssueComments
 
 		decoder := json.NewDecoder(response.Body)
 		err = decoder.Decode(&issueComments)
 		if err != nil {
-			pterm.Fatal.Printf("Failed to decode issues: %v", err)
+			pterm.Error.Printf("Failed to decode issue comments: %v\n", err)
+			os.Exit(1)
 		}
 
 		allIssueComments = append(allIssueComments, issueComments...)

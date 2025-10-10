@@ -3,10 +3,11 @@ package pullrequests
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"os"
 	"strings"
 
 	"github.com/cli/go-gh/pkg/api"
+	"github.com/pterm/pterm"
 	"github.com/ssulei7/gh-dormant-users/internal/header"
 	"github.com/ssulei7/gh-dormant-users/internal/limiter"
 )
@@ -31,20 +32,23 @@ func GetPullRequestCommentsSinceDate(organization string, repo string, date stri
 		limiter.ReleaseConcurrentLimiter()
 		if err != nil {
 			if strings.Contains(err.Error(), "Git Repository is empty.") {
-				log.Printf("Repository %s is empty", repo)
+				// Empty repositories are expected, exit gracefully
 				break
 			} else {
-				log.Printf("Failed to fetch pull request comments: %v", err)
 				return nil
 			}
 		}
+
+		// Check and handle rate limits
+		limiter.CheckAndHandleRateLimit(response)
 
 		var pullRequestComments PullRequestComments
 
 		decoder := json.NewDecoder(response.Body)
 		err = decoder.Decode(&pullRequestComments)
 		if err != nil {
-			log.Fatalf("Failed to decode pull request comments: %v", err)
+			pterm.Error.Printf("Failed to decode pull request comments: %v\n", err)
+			os.Exit(1)
 		}
 
 		allPullRequestComments = append(allPullRequestComments, pullRequestComments...)
@@ -57,7 +61,6 @@ func GetPullRequestCommentsSinceDate(organization string, repo string, date stri
 
 		nextURL := header.GetNextPageURL(linkHeader)
 		if nextURL == "" {
-			log.Printf("No next page URL found")
 			break
 		}
 
