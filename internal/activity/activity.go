@@ -5,6 +5,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/cli/go-gh/pkg/api"
 	"github.com/pterm/pterm"
@@ -16,7 +17,8 @@ import (
 )
 
 var (
-	activeUsers map[string]bool
+	activeUsers    map[string]bool
+	activeUsersMux sync.RWMutex
 )
 
 func init() {
@@ -44,26 +46,50 @@ func CheckActivity(users users.Users, organization string, repositories reposito
 func commitActivity(usersList users.Users, organization string, repositories repository.Repositories, date string, client api.RESTClient) {
 	commitProgressBar, _ := pterm.DefaultProgressbar.WithTotal(len(repositories)).WithTitle("Checking for commit activity...").Start()
 	defer commitProgressBar.Stop()
-	for _, repo := range repositories {
-		commits := commits.GetCommitsSinceDate(organization, repo.Name, date, client)
-		commitProgressBar.Increment()
-		if len(commits) == 0 {
-			continue
-		}
-		for _, commit := range commits {
-			for i := range usersList {
-				user := &usersList[i]
-				if commit.Author.Login == user.Login {
-					user.AddActivityType("commits")
-					if !user.Active && !activeUsers[user.Login] {
-						user.MakeActive()
-						activeUsers[user.Login] = true
+
+	var wg sync.WaitGroup
+	var progressMux sync.Mutex
+	repoChan := make(chan repository.Repository, len(repositories))
+
+	numWorkers := 10
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for repo := range repoChan {
+				commitList := commits.GetCommitsSinceDate(organization, repo.Name, date, client)
+				if len(commitList) == 0 {
+					progressMux.Lock()
+					commitProgressBar.Increment()
+					progressMux.Unlock()
+					continue
+				}
+				for _, commit := range commitList {
+					for i := range usersList {
+						user := &usersList[i]
+						if commit.Author.Login == user.Login {
+							user.AddActivityType("commits")
+							activeUsersMux.Lock()
+							if !user.Active && !activeUsers[user.Login] {
+								user.MakeActive()
+								activeUsers[user.Login] = true
+							}
+							activeUsersMux.Unlock()
+						}
 					}
 				}
+				progressMux.Lock()
+				commitProgressBar.Increment()
+				progressMux.Unlock()
 			}
-		}
-		commitProgressBar.Increment()
+		}()
 	}
+
+	for _, repo := range repositories {
+		repoChan <- repo
+	}
+	close(repoChan)
+	wg.Wait()
 }
 
 func GenerateBarChartOfActiveUsers() {
@@ -120,71 +146,146 @@ func GenerateUserReportCSV(users users.Users, filePath string) error {
 func issueActivity(users users.Users, organization string, repositories repository.Repositories, date string, client api.RESTClient) {
 	issueActivityProgressBar, _ := pterm.DefaultProgressbar.WithTotal(len(repositories)).WithTitle("Checking for issue activity...").Start()
 	defer issueActivityProgressBar.Stop()
-	for _, repo := range repositories {
-		issueActivityProgressBar.Increment()
-		issues := issues.GetIssuesSinceDate(organization, repo.Name, date, client)
-		if len(issues) == 0 {
-			continue
-		}
-		for _, issue := range issues {
-			for i := range users {
-				user := &users[i]
-				if issue.User.Login == user.Login {
-					user.AddActivityType("issues")
-					if !user.Active && !activeUsers[user.Login] {
-						user.MakeActive()
-						activeUsers[user.Login] = true
+
+	var wg sync.WaitGroup
+	var progressMux sync.Mutex
+	repoChan := make(chan repository.Repository, len(repositories))
+
+	numWorkers := 10
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for repo := range repoChan {
+				issueList := issues.GetIssuesSinceDate(organization, repo.Name, date, client)
+				if len(issueList) == 0 {
+					progressMux.Lock()
+					issueActivityProgressBar.Increment()
+					progressMux.Unlock()
+					continue
+				}
+				for _, issue := range issueList {
+					for i := range users {
+						user := &users[i]
+						if issue.User.Login == user.Login {
+							user.AddActivityType("issues")
+							activeUsersMux.Lock()
+							if !user.Active && !activeUsers[user.Login] {
+								user.MakeActive()
+								activeUsers[user.Login] = true
+							}
+							activeUsersMux.Unlock()
+						}
 					}
 				}
+				progressMux.Lock()
+				issueActivityProgressBar.Increment()
+				progressMux.Unlock()
 			}
-		}
+		}()
 	}
+
+	for _, repo := range repositories {
+		repoChan <- repo
+	}
+	close(repoChan)
+	wg.Wait()
 }
 
 func issueCommentActivity(users users.Users, organization string, repositories repository.Repositories, date string, client api.RESTClient) {
 	issueCommentProgressBar, _ := pterm.DefaultProgressbar.WithTotal(len(repositories)).WithTitle("Checking for issue comment activity...").Start()
 	defer issueCommentProgressBar.Stop()
-	for _, repo := range repositories {
-		issueCommentProgressBar.Increment()
-		issueComments := issues.GetIssueCommentsSinceDate(organization, repo.Name, date, client)
-		if len(issueComments) == 0 {
-			continue
-		}
-		for _, issueComment := range issueComments {
-			for i := range users {
-				user := &users[i]
-				if issueComment.User.Login == user.Login {
-					user.AddActivityType("issue-comments")
-					if !user.Active && !activeUsers[user.Login] {
-						user.MakeActive()
-						activeUsers[user.Login] = true
+
+	var wg sync.WaitGroup
+	var progressMux sync.Mutex
+	repoChan := make(chan repository.Repository, len(repositories))
+
+	numWorkers := 10
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for repo := range repoChan {
+				issueCommentList := issues.GetIssueCommentsSinceDate(organization, repo.Name, date, client)
+				if len(issueCommentList) == 0 {
+					progressMux.Lock()
+					issueCommentProgressBar.Increment()
+					progressMux.Unlock()
+					continue
+				}
+				for _, issueComment := range issueCommentList {
+					for i := range users {
+						user := &users[i]
+						if issueComment.User.Login == user.Login {
+							user.AddActivityType("issue-comments")
+							activeUsersMux.Lock()
+							if !user.Active && !activeUsers[user.Login] {
+								user.MakeActive()
+								activeUsers[user.Login] = true
+							}
+							activeUsersMux.Unlock()
+						}
 					}
 				}
+				progressMux.Lock()
+				issueCommentProgressBar.Increment()
+				progressMux.Unlock()
 			}
-		}
+		}()
 	}
+
+	for _, repo := range repositories {
+		repoChan <- repo
+	}
+	close(repoChan)
+	wg.Wait()
 }
 
 func pullRequestCommentActivity(users users.Users, organization string, repositories repository.Repositories, date string, client api.RESTClient) {
 	pullRequestCommentProgressBar, _ := pterm.DefaultProgressbar.WithTotal(len(repositories)).WithTitle("Checking for pull request comment activity...").Start()
 	defer pullRequestCommentProgressBar.Stop()
-	for _, repo := range repositories {
-		pullRequestCommentProgressBar.Increment()
-		pullRequestComments := pullrequests.GetPullRequestCommentsSinceDate(organization, repo.Name, date, client)
-		if len(pullRequestComments) == 0 {
-			continue
-		}
-		for _, pullRequestComment := range pullRequestComments {
-			for i := range users {
-				user := &users[i]
-				if pullRequestComment.User.Login == user.Login {
-					user.AddActivityType("pr-comments")
-					if !user.Active && !activeUsers[user.Login] {
-						user.MakeActive()
-						activeUsers[user.Login] = true
+
+	var wg sync.WaitGroup
+	var progressMux sync.Mutex
+	repoChan := make(chan repository.Repository, len(repositories))
+
+	numWorkers := 10
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for repo := range repoChan {
+				pullRequestCommentList := pullrequests.GetPullRequestCommentsSinceDate(organization, repo.Name, date, client)
+				if len(pullRequestCommentList) == 0 {
+					progressMux.Lock()
+					pullRequestCommentProgressBar.Increment()
+					progressMux.Unlock()
+					continue
+				}
+				for _, pullRequestComment := range pullRequestCommentList {
+					for i := range users {
+						user := &users[i]
+						if pullRequestComment.User.Login == user.Login {
+							user.AddActivityType("pr-comments")
+							activeUsersMux.Lock()
+							if !user.Active && !activeUsers[user.Login] {
+								user.MakeActive()
+								activeUsers[user.Login] = true
+							}
+							activeUsersMux.Unlock()
+						}
 					}
 				}
+				progressMux.Lock()
+				pullRequestCommentProgressBar.Increment()
+				progressMux.Unlock()
 			}
-		}
+		}()
 	}
+
+	for _, repo := range repositories {
+		repoChan <- repo
+	}
+	close(repoChan)
+	wg.Wait()
 }

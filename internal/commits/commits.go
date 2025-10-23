@@ -44,8 +44,10 @@ func GetCommitsSinceDate(organization string, repository string, date string, cl
 			}
 		}
 
-		// Check and handle rate limits
-		limiter.CheckAndHandleRateLimit(response)
+		// Check and handle rate limits before decoding
+		if limiter.CheckAndHandleRateLimit(response) {
+			continue // Retry the request after rate limit wait
+		}
 
 		var commits Commits
 		decoder := json.NewDecoder(response.Body)
