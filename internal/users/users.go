@@ -131,7 +131,7 @@ func getUserEmails(users Users) {
 				decoder := json.NewDecoder(response.Body)
 				err = decoder.Decode(&userDetails)
 				if err != nil {
-					pterm.Error.Printf("Failed to decode user details: %v\n", err)
+					pterm.Error.Printf("Failed to decode user details for %s: %v\n", users[index].Login, err)
 					continue
 				}
 
