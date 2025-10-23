@@ -56,13 +56,11 @@ func CheckAndHandleRateLimit(response *http.Response) bool {
 				if err == nil {
 					resetTimestamp := time.Unix(resetTime, 0)
 					waitDuration := time.Until(resetTimestamp)
-					// Only wait if reset is in the future and we're at or near the limit
-					if remainingCount == 0 && waitDuration > 0 {
-						pterm.Warning.Printf("Primary rate limit exhausted. Waiting %v until reset...\n", waitDuration.Round(time.Second))
+					// Wait if we're at or near the limit
+					if waitDuration > 0 {
+						pterm.Warning.Printf("Rate limit approaching (%d remaining). Waiting %v until reset...\n", remainingCount, waitDuration.Round(time.Second))
 						time.Sleep(waitDuration)
 						return true
-					} else if remainingCount < 100 {
-						pterm.Info.Printf("Rate limit low: %d requests remaining\n", remainingCount)
 					}
 				}
 			}

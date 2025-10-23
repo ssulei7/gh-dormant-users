@@ -30,6 +30,10 @@ func GetOrganizationUsers(organization string, email bool, client api.RESTClient
 	// Start the spinner
 	spinner, _ := pterm.DefaultSpinner.Start("Fetching users...")
 
+	if email {
+		pterm.Info.Println("Getting user emails, if present")
+	}
+
 	url := fmt.Sprintf("orgs/%s/members?per_page=100", organization)
 	for {
 		response, err := client.Request("GET", url, nil)
@@ -99,7 +103,6 @@ func (u *User) GetActivityTypes() []string {
 }
 
 func getUserEmails(users Users) {
-	pterm.Info.Println("Getting user emails, if present")
 	client, err := gh.RESTClient(nil)
 	if err != nil {
 		pterm.Error.Printf("Failed to create REST client: %v\n", err)

@@ -50,8 +50,10 @@ func GetIssuesSinceDate(organization string, repo string, date string, client ap
 			}
 		}
 
-		// Check and handle rate limits
-		limiter.CheckAndHandleRateLimit(response)
+		// Check and handle rate limits before decoding
+		if limiter.CheckAndHandleRateLimit(response) {
+			continue // Retry the request after rate limit wait
+		}
 
 		var issues Issues
 
@@ -97,8 +99,10 @@ func GetIssueCommentsSinceDate(organization string, repo string, date string, cl
 			}
 		}
 
-		// Check and handle rate limits
-		limiter.CheckAndHandleRateLimit(response)
+		// Check and handle rate limits before decoding
+		if limiter.CheckAndHandleRateLimit(response) {
+			continue // Retry the request after rate limit wait
+		}
 
 		var issueComments IssueComments
 

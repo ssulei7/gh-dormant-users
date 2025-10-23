@@ -39,8 +39,10 @@ func GetPullRequestCommentsSinceDate(organization string, repo string, date stri
 			}
 		}
 
-		// Check and handle rate limits
-		limiter.CheckAndHandleRateLimit(response)
+		// Check and handle rate limits before decoding
+		if limiter.CheckAndHandleRateLimit(response) {
+			continue // Retry the request after rate limit wait
+		}
 
 		var pullRequestComments PullRequestComments
 

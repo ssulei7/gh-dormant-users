@@ -48,6 +48,7 @@ func commitActivity(usersList users.Users, organization string, repositories rep
 	defer commitProgressBar.Stop()
 
 	var wg sync.WaitGroup
+	var progressMux sync.Mutex
 	repoChan := make(chan repository.Repository, len(repositories))
 
 	numWorkers := 10
@@ -58,7 +59,9 @@ func commitActivity(usersList users.Users, organization string, repositories rep
 			for repo := range repoChan {
 				commitList := commits.GetCommitsSinceDate(organization, repo.Name, date, client)
 				if len(commitList) == 0 {
+					progressMux.Lock()
 					commitProgressBar.Increment()
+					progressMux.Unlock()
 					continue
 				}
 				for _, commit := range commitList {
@@ -75,7 +78,9 @@ func commitActivity(usersList users.Users, organization string, repositories rep
 						}
 					}
 				}
+				progressMux.Lock()
 				commitProgressBar.Increment()
+				progressMux.Unlock()
 			}
 		}()
 	}
@@ -143,6 +148,7 @@ func issueActivity(users users.Users, organization string, repositories reposito
 	defer issueActivityProgressBar.Stop()
 
 	var wg sync.WaitGroup
+	var progressMux sync.Mutex
 	repoChan := make(chan repository.Repository, len(repositories))
 
 	numWorkers := 10
@@ -153,7 +159,9 @@ func issueActivity(users users.Users, organization string, repositories reposito
 			for repo := range repoChan {
 				issueList := issues.GetIssuesSinceDate(organization, repo.Name, date, client)
 				if len(issueList) == 0 {
+					progressMux.Lock()
 					issueActivityProgressBar.Increment()
+					progressMux.Unlock()
 					continue
 				}
 				for _, issue := range issueList {
@@ -170,7 +178,9 @@ func issueActivity(users users.Users, organization string, repositories reposito
 						}
 					}
 				}
+				progressMux.Lock()
 				issueActivityProgressBar.Increment()
+				progressMux.Unlock()
 			}
 		}()
 	}
@@ -187,6 +197,7 @@ func issueCommentActivity(users users.Users, organization string, repositories r
 	defer issueCommentProgressBar.Stop()
 
 	var wg sync.WaitGroup
+	var progressMux sync.Mutex
 	repoChan := make(chan repository.Repository, len(repositories))
 
 	numWorkers := 10
@@ -197,7 +208,9 @@ func issueCommentActivity(users users.Users, organization string, repositories r
 			for repo := range repoChan {
 				issueCommentList := issues.GetIssueCommentsSinceDate(organization, repo.Name, date, client)
 				if len(issueCommentList) == 0 {
+					progressMux.Lock()
 					issueCommentProgressBar.Increment()
+					progressMux.Unlock()
 					continue
 				}
 				for _, issueComment := range issueCommentList {
@@ -214,7 +227,9 @@ func issueCommentActivity(users users.Users, organization string, repositories r
 						}
 					}
 				}
+				progressMux.Lock()
 				issueCommentProgressBar.Increment()
+				progressMux.Unlock()
 			}
 		}()
 	}
@@ -231,6 +246,7 @@ func pullRequestCommentActivity(users users.Users, organization string, reposito
 	defer pullRequestCommentProgressBar.Stop()
 
 	var wg sync.WaitGroup
+	var progressMux sync.Mutex
 	repoChan := make(chan repository.Repository, len(repositories))
 
 	numWorkers := 10
@@ -241,7 +257,9 @@ func pullRequestCommentActivity(users users.Users, organization string, reposito
 			for repo := range repoChan {
 				pullRequestCommentList := pullrequests.GetPullRequestCommentsSinceDate(organization, repo.Name, date, client)
 				if len(pullRequestCommentList) == 0 {
+					progressMux.Lock()
 					pullRequestCommentProgressBar.Increment()
+					progressMux.Unlock()
 					continue
 				}
 				for _, pullRequestComment := range pullRequestCommentList {
@@ -258,7 +276,9 @@ func pullRequestCommentActivity(users users.Users, organization string, reposito
 						}
 					}
 				}
+				progressMux.Lock()
 				pullRequestCommentProgressBar.Increment()
+				progressMux.Unlock()
 			}
 		}()
 	}
