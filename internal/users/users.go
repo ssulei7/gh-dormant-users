@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sync"
 
 	"github.com/cli/go-gh"
 	"github.com/cli/go-gh/pkg/api"
@@ -105,24 +106,40 @@ func getUserEmails(users Users) {
 		os.Exit(1)
 	}
 
-	for index := range users {
-		limiter.AcquireConcurrentLimiter()
-		url := fmt.Sprintf("users/%s", users[index].Login)
-		response, err := client.Request("GET", url, nil)
-		limiter.ReleaseConcurrentLimiter()
-		if err != nil {
-			pterm.Info.Printf("Failed to fetch user details: %v\n", err)
-			continue
-		}
+	var wg sync.WaitGroup
+	userChan := make(chan int, len(users))
+	numWorkers := 10
 
-		var userDetails User
-		decoder := json.NewDecoder(response.Body)
-		err = decoder.Decode(&userDetails)
-		if err != nil {
-			pterm.Error.Printf("Failed to decode user details: %v\n", err)
-			os.Exit(1)
-		}
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for index := range userChan {
+				limiter.AcquireConcurrentLimiter()
+				url := fmt.Sprintf("users/%s", users[index].Login)
+				response, err := client.Request("GET", url, nil)
+				limiter.ReleaseConcurrentLimiter()
+				if err != nil {
+					pterm.Info.Printf("Failed to fetch user details: %v\n", err)
+					continue
+				}
 
-		users[index].Email = userDetails.Email
+				var userDetails User
+				decoder := json.NewDecoder(response.Body)
+				err = decoder.Decode(&userDetails)
+				if err != nil {
+					pterm.Error.Printf("Failed to decode user details: %v\n", err)
+					continue
+				}
+
+				users[index].Email = userDetails.Email
+			}
+		}()
 	}
+
+	for index := range users {
+		userChan <- index
+	}
+	close(userChan)
+	wg.Wait()
 }
