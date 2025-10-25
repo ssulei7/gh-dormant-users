@@ -3,9 +3,8 @@ package repository
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"os"
-	"time"
+	"sync"
 
 	"github.com/cli/go-gh/pkg/api"
 	"github.com/pterm/pterm"
@@ -20,55 +19,95 @@ type Repository struct {
 type Repositories []Repository
 
 func GetOrgRepositories(organization string, client api.RESTClient) Repositories {
-	var allRepositories Repositories
-
 	// Start the spinner
 	spinner, _ := pterm.DefaultSpinner.Start("Fetching repositories...")
 
+	// Fetch first page
 	url := fmt.Sprintf("orgs/%s/repos?per_page=100", organization)
-	for {
-		var response *http.Response
-		var err error
-		for retries := 0; retries < 5; retries++ {
-			response, err = client.Request("GET", url, nil)
-			if err != nil {
-				pterm.Warning.Printf("Failed to fetch repositories: %v. Retrying in %d seconds...\n", err, (1 << retries))
-				time.Sleep(time.Duration(1<<retries) * time.Second)
-				continue
-			}
-			// Check and handle rate limits from headers
-			limiter.CheckAndHandleRateLimit(response)
-			break
-		}
-		if err != nil {
-			spinner.Fail("Failed to fetch repositories after retries")
-			pterm.Error.Printf("Failed to fetch repositories after retries: %v\n", err)
-			os.Exit(1)
-		}
+	limiter.AcquireConcurrentLimiter()
+	response, err := client.Request("GET", url, nil)
+	limiter.CheckAndHandleRateLimit(response)
+	limiter.ReleaseConcurrentLimiter()
+	if err != nil {
+		spinner.Fail("Failed to fetch repositories")
+		pterm.Error.Printf("Failed to fetch repositories: %v\n", err)
+		os.Exit(1)
+	}
 
-		var repositories Repositories
-		decoder := json.NewDecoder(response.Body)
-		err = decoder.Decode(&repositories)
-		if err != nil {
-			spinner.Fail("Failed to decode repositories")
-			pterm.Error.Printf("Failed to decode repositories: %v\n", err)
-			os.Exit(1)
-		}
+	var repositories Repositories
+	decoder := json.NewDecoder(response.Body)
+	err = decoder.Decode(&repositories)
+	if err != nil {
+		spinner.Fail("Failed to decode repositories")
+		pterm.Error.Printf("Failed to decode repositories: %v\n", err)
+		os.Exit(1)
+	}
 
-		allRepositories = append(allRepositories, repositories...)
+	allRepositories := make(Repositories, len(repositories))
+	copy(allRepositories, repositories)
 
-		// Check for the 'Link' header to see if there are more pages
-		linkHeader := response.Header.Get("Link")
-		if linkHeader == "" {
-			break
-		}
-
+	// Get all page URLs from Link header
+	linkHeader := response.Header.Get("Link")
+	var pageURLs []string
+	for linkHeader != "" {
 		nextURL := header.GetNextPageURL(linkHeader)
 		if nextURL == "" {
 			break
 		}
+		pageURLs = append(pageURLs, nextURL)
 
-		url = nextURL
+		// Fetch next page to get updated Link header
+		limiter.AcquireConcurrentLimiter()
+		response, err := client.Request("GET", nextURL, nil)
+		limiter.CheckAndHandleRateLimit(response)
+		limiter.ReleaseConcurrentLimiter()
+		if err != nil {
+			continue
+		}
+		linkHeader = response.Header.Get("Link")
+	}
+
+	// Fetch remaining pages concurrently
+	if len(pageURLs) > 0 {
+		pageChan := make(chan string, len(pageURLs))
+		resultChan := make(chan Repositories, len(pageURLs))
+		var wg sync.WaitGroup
+		numWorkers := 10
+
+		for i := 0; i < numWorkers; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for pageURL := range pageChan {
+					limiter.AcquireConcurrentLimiter()
+					response, err := client.Request("GET", pageURL, nil)
+					limiter.CheckAndHandleRateLimit(response)
+					limiter.ReleaseConcurrentLimiter()
+					if err != nil {
+						continue
+					}
+
+					var pageRepos Repositories
+					decoder := json.NewDecoder(response.Body)
+					err = decoder.Decode(&pageRepos)
+					if err != nil {
+						continue
+					}
+					resultChan <- pageRepos
+				}
+			}()
+		}
+
+		for _, pageURL := range pageURLs {
+			pageChan <- pageURL
+		}
+		close(pageChan)
+		wg.Wait()
+		close(resultChan)
+
+		for pageRepos := range resultChan {
+			allRepositories = append(allRepositories, pageRepos...)
+		}
 	}
 
 	spinner.Success("Fetched repositories successfully")

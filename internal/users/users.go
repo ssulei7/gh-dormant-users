@@ -25,7 +25,6 @@ type Users []User
 
 func GetOrganizationUsers(organization string, email bool, client api.RESTClient) Users {
 	pterm.Info.Printf("Starting to fetch users for organization: %s\n", organization)
-	var allUsers Users
 
 	// Start the spinner
 	spinner, _ := pterm.DefaultSpinner.Start("Fetching users...")
@@ -34,41 +33,96 @@ func GetOrganizationUsers(organization string, email bool, client api.RESTClient
 		pterm.Info.Println("Getting user emails, if present")
 	}
 
+	// Fetch first page to get total count
 	url := fmt.Sprintf("orgs/%s/members?per_page=100", organization)
-	for {
-		response, err := client.Request("GET", url, nil)
-		if err != nil {
-			spinner.Fail("Failed to fetch users")
-			pterm.Error.Printf("Failed to fetch users: %v\n", err)
-			os.Exit(1)
-		}
+	limiter.AcquireConcurrentLimiter()
+	response, err := client.Request("GET", url, nil)
+	limiter.CheckAndHandleRateLimit(response)
+	limiter.ReleaseConcurrentLimiter()
+	if err != nil {
+		spinner.Fail("Failed to fetch users")
+		pterm.Error.Printf("Failed to fetch users: %v\n", err)
+		os.Exit(1)
+	}
 
-		var users Users
-		decoder := json.NewDecoder(response.Body)
-		err = decoder.Decode(&users)
-		if err != nil {
-			spinner.Fail("Failed to decode users")
-			pterm.PrintOnErrorf("Failed to decode users: %v\n", err)
-		}
+	var users Users
+	decoder := json.NewDecoder(response.Body)
+	err = decoder.Decode(&users)
+	if err != nil {
+		spinner.Fail("Failed to decode users")
+		pterm.PrintOnErrorf("Failed to decode users: %v\n", err)
+	}
 
-		// get user emails sequentially
-		if email {
-			getUserEmails(users)
-		}
-		allUsers = append(allUsers, users...)
+	allUsers := make(Users, len(users))
+	copy(allUsers, users)
 
-		// Check for the 'Link' header to see if there are more pages
-		linkHeader := response.Header.Get("Link")
-		if linkHeader == "" {
-			break
-		}
-
+	// Get all page URLs from Link header
+	linkHeader := response.Header.Get("Link")
+	var pageURLs []string
+	for linkHeader != "" {
 		nextURL := header.GetNextPageURL(linkHeader)
 		if nextURL == "" {
 			break
 		}
+		pageURLs = append(pageURLs, nextURL)
 
-		url = nextURL
+		// Fetch next page to get updated Link header
+		limiter.AcquireConcurrentLimiter()
+		response, err := client.Request("GET", nextURL, nil)
+		limiter.CheckAndHandleRateLimit(response)
+		limiter.ReleaseConcurrentLimiter()
+		if err != nil {
+			continue
+		}
+		linkHeader = response.Header.Get("Link")
+	}
+
+	// Fetch remaining pages concurrently
+	if len(pageURLs) > 0 {
+		pageChan := make(chan string, len(pageURLs))
+		resultChan := make(chan Users, len(pageURLs))
+		var wg sync.WaitGroup
+		numWorkers := 10
+
+		for i := 0; i < numWorkers; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for pageURL := range pageChan {
+					limiter.AcquireConcurrentLimiter()
+					response, err := client.Request("GET", pageURL, nil)
+					limiter.CheckAndHandleRateLimit(response)
+					limiter.ReleaseConcurrentLimiter()
+					if err != nil {
+						continue
+					}
+
+					var pageUsers Users
+					decoder := json.NewDecoder(response.Body)
+					err = decoder.Decode(&pageUsers)
+					if err != nil {
+						continue
+					}
+					resultChan <- pageUsers
+				}
+			}()
+		}
+
+		for _, pageURL := range pageURLs {
+			pageChan <- pageURL
+		}
+		close(pageChan)
+		wg.Wait()
+		close(resultChan)
+
+		for pageUsers := range resultChan {
+			allUsers = append(allUsers, pageUsers...)
+		}
+	}
+
+	// get user emails
+	if email {
+		getUserEmails(allUsers)
 	}
 
 	spinner.Success("Fetched users successfully")
@@ -121,6 +175,7 @@ func getUserEmails(users Users) {
 				limiter.AcquireConcurrentLimiter()
 				url := fmt.Sprintf("users/%s", users[index].Login)
 				response, err := client.Request("GET", url, nil)
+				limiter.CheckAndHandleRateLimit(response)
 				limiter.ReleaseConcurrentLimiter()
 				if err != nil {
 					pterm.Info.Printf("Failed to fetch user details: %v\n", err)
