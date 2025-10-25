@@ -51,7 +51,7 @@ func commitActivity(usersList users.Users, organization string, repositories rep
 	var progressMux sync.Mutex
 	repoChan := make(chan repository.Repository, len(repositories))
 
-	numWorkers := 10
+	numWorkers := 5
 	for i := 0; i < numWorkers; i++ {
 		wg.Add(1)
 		go func() {
@@ -151,7 +151,7 @@ func issueActivity(users users.Users, organization string, repositories reposito
 	var progressMux sync.Mutex
 	repoChan := make(chan repository.Repository, len(repositories))
 
-	numWorkers := 10
+	numWorkers := 5
 	for i := 0; i < numWorkers; i++ {
 		wg.Add(1)
 		go func() {
@@ -200,7 +200,7 @@ func issueCommentActivity(users users.Users, organization string, repositories r
 	var progressMux sync.Mutex
 	repoChan := make(chan repository.Repository, len(repositories))
 
-	numWorkers := 10
+	numWorkers := 5
 	for i := 0; i < numWorkers; i++ {
 		wg.Add(1)
 		go func() {
@@ -249,7 +249,7 @@ func pullRequestCommentActivity(users users.Users, organization string, reposito
 	var progressMux sync.Mutex
 	repoChan := make(chan repository.Repository, len(repositories))
 
-	numWorkers := 10
+	numWorkers := 5
 	for i := 0; i < numWorkers; i++ {
 		wg.Add(1)
 		go func() {

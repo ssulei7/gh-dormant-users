@@ -37,6 +37,9 @@ func GetOrgRepositories(organization string, client api.RESTClient) Repositories
 	var repositories Repositories
 	decoder := json.NewDecoder(response.Body)
 	err = decoder.Decode(&repositories)
+	linkHeader := response.Header.Get("Link")
+	response.Body.Close()
+
 	if err != nil {
 		spinner.Fail("Failed to decode repositories")
 		pterm.Error.Printf("Failed to decode repositories: %v\n", err)
@@ -47,7 +50,6 @@ func GetOrgRepositories(organization string, client api.RESTClient) Repositories
 	copy(allRepositories, repositories)
 
 	// Get all page URLs from Link header
-	linkHeader := response.Header.Get("Link")
 	var pageURLs []string
 	for linkHeader != "" {
 		nextURL := header.GetNextPageURL(linkHeader)
@@ -65,6 +67,7 @@ func GetOrgRepositories(organization string, client api.RESTClient) Repositories
 			continue
 		}
 		linkHeader = response.Header.Get("Link")
+		response.Body.Close()
 	}
 
 	// Fetch remaining pages concurrently
@@ -72,7 +75,7 @@ func GetOrgRepositories(organization string, client api.RESTClient) Repositories
 		pageChan := make(chan string, len(pageURLs))
 		resultChan := make(chan Repositories, len(pageURLs))
 		var wg sync.WaitGroup
-		numWorkers := 10
+		numWorkers := 5
 
 		for i := 0; i < numWorkers; i++ {
 			wg.Add(1)
@@ -81,15 +84,18 @@ func GetOrgRepositories(organization string, client api.RESTClient) Repositories
 				for pageURL := range pageChan {
 					limiter.AcquireConcurrentLimiter()
 					response, err := client.Request("GET", pageURL, nil)
-					limiter.CheckAndHandleRateLimit(response)
-					limiter.ReleaseConcurrentLimiter()
 					if err != nil {
+						limiter.ReleaseConcurrentLimiter()
 						continue
 					}
+					limiter.CheckAndHandleRateLimit(response)
+					limiter.ReleaseConcurrentLimiter()
 
 					var pageRepos Repositories
 					decoder := json.NewDecoder(response.Body)
 					err = decoder.Decode(&pageRepos)
+					response.Body.Close()
+
 					if err != nil {
 						continue
 					}

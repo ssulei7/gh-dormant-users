@@ -34,25 +34,25 @@ func GetCommitsSinceDate(organization string, repository string, date string, cl
 	for {
 		limiter.AcquireConcurrentLimiter()
 		response, err := client.Request("GET", url, nil)
-		limiter.ReleaseConcurrentLimiter()
 		if err != nil {
+			limiter.ReleaseConcurrentLimiter()
 			if strings.Contains(err.Error(), "Git Repository is empty.") {
-				// Empty repositories are expected, exit gracefully
 				break
 			} else {
 				return nil
 			}
 		}
 
-		// Check and handle rate limits before decoding
-		if limiter.CheckAndHandleRateLimit(response) {
-			continue // Retry the request after rate limit wait
-		}
+		limiter.CheckAndHandleRateLimit(response)
+		limiter.ReleaseConcurrentLimiter()
 
 		var commits Commits
 		decoder := json.NewDecoder(response.Body)
 
 		err = decoder.Decode(&commits)
+		linkHeader := response.Header.Get("Link")
+		response.Body.Close()
+
 		if err != nil {
 			pterm.Error.Printf("Failed to decode commits: %v\n", err)
 			os.Exit(1)
@@ -60,8 +60,6 @@ func GetCommitsSinceDate(organization string, repository string, date string, cl
 
 		allCommits = append(allCommits, commits...)
 
-		// Check for the 'Link' header to see if there are more pages
-		linkHeader := response.Header.Get("Link")
 		if linkHeader == "" {
 			break
 		}
