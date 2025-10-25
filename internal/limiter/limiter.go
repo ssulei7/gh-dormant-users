@@ -10,7 +10,7 @@ import (
 
 const (
 	PrimaryRateLimit      = 5000
-	MaxConcurrentRequests = 100
+	MaxConcurrentRequests = 15
 )
 
 var (
@@ -48,18 +48,16 @@ func CheckAndHandleRateLimit(response *http.Response) bool {
 	remaining := response.Header.Get("X-RateLimit-Remaining")
 	if remaining != "" {
 		remainingCount, err := strconv.Atoi(remaining)
-		if err == nil && remainingCount < 100 {
-			// Get reset time
+		if err == nil && remainingCount <= 10 {
 			reset := response.Header.Get("X-RateLimit-Reset")
 			if reset != "" {
 				resetTime, err := strconv.ParseInt(reset, 10, 64)
 				if err == nil {
 					resetTimestamp := time.Unix(resetTime, 0)
 					waitDuration := time.Until(resetTimestamp)
-					// Wait only if we've hit the limit
-					if remainingCount == 0 && waitDuration > 0 {
-						pterm.Warning.Printf("Rate limit hit (%d remaining). Waiting %v until reset...\n", remainingCount, waitDuration.Round(time.Second))
-						time.Sleep(waitDuration)
+					if waitDuration > 0 {
+						pterm.Warning.Printf("Rate limit approaching (%d remaining). Waiting %v until reset...\n", remainingCount, waitDuration.Round(time.Second))
+						time.Sleep(waitDuration + time.Second)
 						return true
 					}
 				}

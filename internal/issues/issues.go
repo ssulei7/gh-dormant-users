@@ -40,25 +40,25 @@ func GetIssuesSinceDate(organization string, repo string, date string, client ap
 	for {
 		limiter.AcquireConcurrentLimiter()
 		response, err := client.Request("GET", url, nil)
-		limiter.ReleaseConcurrentLimiter()
 		if err != nil {
+			limiter.ReleaseConcurrentLimiter()
 			if strings.Contains(err.Error(), "Git Repository is empty.") {
-				// Empty repositories are expected, exit gracefully
 				break
 			} else {
 				return nil
 			}
 		}
 
-		// Check and handle rate limits before decoding
-		if limiter.CheckAndHandleRateLimit(response) {
-			continue // Retry the request after rate limit wait
-		}
+		limiter.CheckAndHandleRateLimit(response)
+		limiter.ReleaseConcurrentLimiter()
 
 		var issues Issues
 
 		decoder := json.NewDecoder(response.Body)
 		err = decoder.Decode(&issues)
+		linkHeader := response.Header.Get("Link")
+		response.Body.Close()
+
 		if err != nil {
 			pterm.Error.Printf("Failed to decode issues: %v\n", err)
 			os.Exit(1)
@@ -66,8 +66,6 @@ func GetIssuesSinceDate(organization string, repo string, date string, client ap
 
 		allIssues = append(allIssues, issues...)
 
-		// Check for the 'Link' header to see if there are more pages
-		linkHeader := response.Header.Get("Link")
 		if linkHeader == "" {
 			break
 		}
@@ -89,25 +87,25 @@ func GetIssueCommentsSinceDate(organization string, repo string, date string, cl
 	for {
 		limiter.AcquireConcurrentLimiter()
 		response, err := client.Request("GET", url, nil)
-		limiter.ReleaseConcurrentLimiter()
 		if err != nil {
+			limiter.ReleaseConcurrentLimiter()
 			if strings.Contains(err.Error(), "Git Repository is empty.") {
-				// Empty repositories are expected, exit gracefully
 				break
 			} else {
 				return nil
 			}
 		}
 
-		// Check and handle rate limits before decoding
-		if limiter.CheckAndHandleRateLimit(response) {
-			continue // Retry the request after rate limit wait
-		}
+		limiter.CheckAndHandleRateLimit(response)
+		limiter.ReleaseConcurrentLimiter()
 
 		var issueComments IssueComments
 
 		decoder := json.NewDecoder(response.Body)
 		err = decoder.Decode(&issueComments)
+		linkHeader := response.Header.Get("Link")
+		response.Body.Close()
+
 		if err != nil {
 			pterm.Error.Printf("Failed to decode issue comments: %v\n", err)
 			os.Exit(1)
@@ -115,8 +113,6 @@ func GetIssueCommentsSinceDate(organization string, repo string, date string, cl
 
 		allIssueComments = append(allIssueComments, issueComments...)
 
-		// Check for the 'Link' header to see if there are more pages
-		linkHeader := response.Header.Get("Link")
 		if linkHeader == "" {
 			break
 		}

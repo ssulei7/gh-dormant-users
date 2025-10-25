@@ -48,6 +48,9 @@ func GetOrganizationUsers(organization string, email bool, client api.RESTClient
 	var users Users
 	decoder := json.NewDecoder(response.Body)
 	err = decoder.Decode(&users)
+	linkHeader := response.Header.Get("Link")
+	response.Body.Close()
+
 	if err != nil {
 		spinner.Fail("Failed to decode users")
 		pterm.PrintOnErrorf("Failed to decode users: %v\n", err)
@@ -57,7 +60,6 @@ func GetOrganizationUsers(organization string, email bool, client api.RESTClient
 	copy(allUsers, users)
 
 	// Get all page URLs from Link header
-	linkHeader := response.Header.Get("Link")
 	var pageURLs []string
 	for linkHeader != "" {
 		nextURL := header.GetNextPageURL(linkHeader)
@@ -75,6 +77,7 @@ func GetOrganizationUsers(organization string, email bool, client api.RESTClient
 			continue
 		}
 		linkHeader = response.Header.Get("Link")
+		response.Body.Close()
 	}
 
 	// Fetch remaining pages concurrently
@@ -82,7 +85,7 @@ func GetOrganizationUsers(organization string, email bool, client api.RESTClient
 		pageChan := make(chan string, len(pageURLs))
 		resultChan := make(chan Users, len(pageURLs))
 		var wg sync.WaitGroup
-		numWorkers := 10
+		numWorkers := 5
 
 		for i := 0; i < numWorkers; i++ {
 			wg.Add(1)
@@ -91,15 +94,18 @@ func GetOrganizationUsers(organization string, email bool, client api.RESTClient
 				for pageURL := range pageChan {
 					limiter.AcquireConcurrentLimiter()
 					response, err := client.Request("GET", pageURL, nil)
-					limiter.CheckAndHandleRateLimit(response)
-					limiter.ReleaseConcurrentLimiter()
 					if err != nil {
+						limiter.ReleaseConcurrentLimiter()
 						continue
 					}
+					limiter.CheckAndHandleRateLimit(response)
+					limiter.ReleaseConcurrentLimiter()
 
 					var pageUsers Users
 					decoder := json.NewDecoder(response.Body)
 					err = decoder.Decode(&pageUsers)
+					response.Body.Close()
+
 					if err != nil {
 						continue
 					}
@@ -165,7 +171,7 @@ func getUserEmails(users Users) {
 
 	var wg sync.WaitGroup
 	userChan := make(chan int, len(users))
-	numWorkers := 10
+	numWorkers := 5
 
 	for i := 0; i < numWorkers; i++ {
 		wg.Add(1)
@@ -175,16 +181,19 @@ func getUserEmails(users Users) {
 				limiter.AcquireConcurrentLimiter()
 				url := fmt.Sprintf("users/%s", users[index].Login)
 				response, err := client.Request("GET", url, nil)
-				limiter.CheckAndHandleRateLimit(response)
-				limiter.ReleaseConcurrentLimiter()
 				if err != nil {
+					limiter.ReleaseConcurrentLimiter()
 					pterm.Info.Printf("Failed to fetch user details: %v\n", err)
 					continue
 				}
+				limiter.CheckAndHandleRateLimit(response)
+				limiter.ReleaseConcurrentLimiter()
 
 				var userDetails User
 				decoder := json.NewDecoder(response.Body)
 				err = decoder.Decode(&userDetails)
+				response.Body.Close()
+
 				if err != nil {
 					pterm.Error.Printf("Failed to decode user details for %s: %v\n", users[index].Login, err)
 					continue

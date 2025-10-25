@@ -29,25 +29,25 @@ func GetPullRequestCommentsSinceDate(organization string, repo string, date stri
 	for {
 		limiter.AcquireConcurrentLimiter()
 		response, err := client.Request("GET", url, nil)
-		limiter.ReleaseConcurrentLimiter()
 		if err != nil {
+			limiter.ReleaseConcurrentLimiter()
 			if strings.Contains(err.Error(), "Git Repository is empty.") {
-				// Empty repositories are expected, exit gracefully
 				break
 			} else {
 				return nil
 			}
 		}
 
-		// Check and handle rate limits before decoding
-		if limiter.CheckAndHandleRateLimit(response) {
-			continue // Retry the request after rate limit wait
-		}
+		limiter.CheckAndHandleRateLimit(response)
+		limiter.ReleaseConcurrentLimiter()
 
 		var pullRequestComments PullRequestComments
 
 		decoder := json.NewDecoder(response.Body)
 		err = decoder.Decode(&pullRequestComments)
+		linkHeader := response.Header.Get("Link")
+		response.Body.Close()
+
 		if err != nil {
 			pterm.Error.Printf("Failed to decode pull request comments: %v\n", err)
 			os.Exit(1)
@@ -55,8 +55,6 @@ func GetPullRequestCommentsSinceDate(organization string, repo string, date stri
 
 		allPullRequestComments = append(allPullRequestComments, pullRequestComments...)
 
-		// Check for the 'Link' header to see if there are more pages
-		linkHeader := response.Header.Get("Link")
 		if linkHeader == "" {
 			break
 		}
