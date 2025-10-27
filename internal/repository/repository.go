@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -24,11 +25,15 @@ func GetOrgRepositories(organization string, client api.RESTClient) Repositories
 
 	// Fetch first page
 	url := fmt.Sprintf("orgs/%s/repos?per_page=100", organization)
-	limiter.AcquireConcurrentLimiter()
+	if err := limiter.WaitForTokenAndAcquire(context.Background()); err != nil {
+		spinner.Fail("Failed to acquire rate limit token")
+		pterm.Error.Printf("Failed to acquire rate limit token: %v\n", err)
+		os.Exit(1)
+	}
+	
 	response, err := client.Request("GET", url, nil)
-	limiter.CheckAndHandleRateLimit(response)
-	limiter.ReleaseConcurrentLimiter()
 	if err != nil {
+		limiter.ReleaseConcurrentLimiter()
 		spinner.Fail("Failed to fetch repositories")
 		pterm.Error.Printf("Failed to fetch repositories: %v\n", err)
 		os.Exit(1)
@@ -39,6 +44,8 @@ func GetOrgRepositories(organization string, client api.RESTClient) Repositories
 	err = decoder.Decode(&repositories)
 	linkHeader := response.Header.Get("Link")
 	response.Body.Close()
+
+	limiter.ReleaseAndHandleRateLimit(response)
 
 	if err != nil {
 		spinner.Fail("Failed to decode repositories")
@@ -59,15 +66,18 @@ func GetOrgRepositories(organization string, client api.RESTClient) Repositories
 		pageURLs = append(pageURLs, nextURL)
 
 		// Fetch next page to get updated Link header
-		limiter.AcquireConcurrentLimiter()
+		if err := limiter.WaitForTokenAndAcquire(context.Background()); err != nil {
+			continue
+		}
+		
 		response, err := client.Request("GET", nextURL, nil)
-		limiter.CheckAndHandleRateLimit(response)
-		limiter.ReleaseConcurrentLimiter()
 		if err != nil {
+			limiter.ReleaseConcurrentLimiter()
 			continue
 		}
 		linkHeader = response.Header.Get("Link")
 		response.Body.Close()
+		limiter.ReleaseAndHandleRateLimit(response)
 	}
 
 	// Fetch remaining pages concurrently
@@ -82,19 +92,22 @@ func GetOrgRepositories(organization string, client api.RESTClient) Repositories
 			go func() {
 				defer wg.Done()
 				for pageURL := range pageChan {
-					limiter.AcquireConcurrentLimiter()
+					if err := limiter.WaitForTokenAndAcquire(context.Background()); err != nil {
+						continue
+					}
+					
 					response, err := client.Request("GET", pageURL, nil)
 					if err != nil {
 						limiter.ReleaseConcurrentLimiter()
 						continue
 					}
-					limiter.CheckAndHandleRateLimit(response)
-					limiter.ReleaseConcurrentLimiter()
 
 					var pageRepos Repositories
 					decoder := json.NewDecoder(response.Body)
 					err = decoder.Decode(&pageRepos)
 					response.Body.Close()
+
+					limiter.ReleaseAndHandleRateLimit(response)
 
 					if err != nil {
 						continue

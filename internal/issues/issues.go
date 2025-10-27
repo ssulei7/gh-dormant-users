@@ -1,6 +1,7 @@
 package issues
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -38,7 +39,11 @@ func GetIssuesSinceDate(organization string, repo string, date string, client ap
 	var allIssues Issues
 	url := fmt.Sprintf("repos/%s/%s/issues?per_page=100&since=%s", organization, repo, date)
 	for {
-		limiter.AcquireConcurrentLimiter()
+		if err := limiter.WaitForTokenAndAcquire(context.Background()); err != nil {
+			pterm.Error.Printf("Failed to acquire rate limit token: %v\n", err)
+			return nil
+		}
+		
 		response, err := client.Request("GET", url, nil)
 		if err != nil {
 			limiter.ReleaseConcurrentLimiter()
@@ -49,15 +54,13 @@ func GetIssuesSinceDate(organization string, repo string, date string, client ap
 			}
 		}
 
-		limiter.CheckAndHandleRateLimit(response)
-		limiter.ReleaseConcurrentLimiter()
-
 		var issues Issues
-
 		decoder := json.NewDecoder(response.Body)
 		err = decoder.Decode(&issues)
 		linkHeader := response.Header.Get("Link")
 		response.Body.Close()
+
+		limiter.ReleaseAndHandleRateLimit(response)
 
 		if err != nil {
 			pterm.Error.Printf("Failed to decode issues: %v\n", err)

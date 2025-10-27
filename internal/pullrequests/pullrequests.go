@@ -1,6 +1,7 @@
 package pullrequests
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -27,7 +28,11 @@ func GetPullRequestCommentsSinceDate(organization string, repo string, date stri
 	var allPullRequestComments PullRequestComments
 	url := fmt.Sprintf("repos/%s/%s/pulls/comments?per_page=100&since=%s", organization, repo, date)
 	for {
-		limiter.AcquireConcurrentLimiter()
+		if err := limiter.WaitForTokenAndAcquire(context.Background()); err != nil {
+			pterm.Error.Printf("Failed to acquire rate limit token: %v\n", err)
+			return nil
+		}
+		
 		response, err := client.Request("GET", url, nil)
 		if err != nil {
 			limiter.ReleaseConcurrentLimiter()
@@ -38,15 +43,13 @@ func GetPullRequestCommentsSinceDate(organization string, repo string, date stri
 			}
 		}
 
-		limiter.CheckAndHandleRateLimit(response)
-		limiter.ReleaseConcurrentLimiter()
-
 		var pullRequestComments PullRequestComments
-
 		decoder := json.NewDecoder(response.Body)
 		err = decoder.Decode(&pullRequestComments)
 		linkHeader := response.Header.Get("Link")
 		response.Body.Close()
+
+		limiter.ReleaseAndHandleRateLimit(response)
 
 		if err != nil {
 			pterm.Error.Printf("Failed to decode pull request comments: %v\n", err)
