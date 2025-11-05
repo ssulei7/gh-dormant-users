@@ -88,7 +88,11 @@ func GetIssueCommentsSinceDate(organization string, repo string, date string, cl
 	var allIssueComments IssueComments
 	url := fmt.Sprintf("repos/%s/%s/issues/comments?per_page=100&since=%s", organization, repo, date)
 	for {
-		limiter.AcquireConcurrentLimiter()
+		if err := limiter.WaitForTokenAndAcquire(context.Background()); err != nil {
+			pterm.Error.Printf("Failed to acquire rate limit token: %v\n", err)
+			return nil
+		}
+
 		response, err := client.Request("GET", url, nil)
 		if err != nil {
 			limiter.ReleaseConcurrentLimiter()
@@ -99,15 +103,13 @@ func GetIssueCommentsSinceDate(organization string, repo string, date string, cl
 			}
 		}
 
-		limiter.CheckAndHandleRateLimit(response)
-		limiter.ReleaseConcurrentLimiter()
-
 		var issueComments IssueComments
-
 		decoder := json.NewDecoder(response.Body)
 		err = decoder.Decode(&issueComments)
 		linkHeader := response.Header.Get("Link")
 		response.Body.Close()
+
+		limiter.ReleaseAndHandleRateLimit(response)
 
 		if err != nil {
 			pterm.Error.Printf("Failed to decode issue comments: %v\n", err)
