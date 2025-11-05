@@ -1,6 +1,7 @@
 package users
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -35,11 +36,15 @@ func GetOrganizationUsers(organization string, email bool, client api.RESTClient
 
 	// Fetch first page to get total count
 	url := fmt.Sprintf("orgs/%s/members?per_page=100", organization)
-	limiter.AcquireConcurrentLimiter()
+	if err := limiter.WaitForTokenAndAcquire(context.Background()); err != nil {
+		spinner.Fail("Failed to acquire rate limit token")
+		pterm.Error.Printf("Failed to acquire rate limit token: %v\n", err)
+		os.Exit(1)
+	}
+	
 	response, err := client.Request("GET", url, nil)
-	limiter.CheckAndHandleRateLimit(response)
-	limiter.ReleaseConcurrentLimiter()
 	if err != nil {
+		limiter.ReleaseConcurrentLimiter()
 		spinner.Fail("Failed to fetch users")
 		pterm.Error.Printf("Failed to fetch users: %v\n", err)
 		os.Exit(1)
@@ -50,6 +55,8 @@ func GetOrganizationUsers(organization string, email bool, client api.RESTClient
 	err = decoder.Decode(&users)
 	linkHeader := response.Header.Get("Link")
 	response.Body.Close()
+
+	limiter.ReleaseAndHandleRateLimit(response)
 
 	if err != nil {
 		spinner.Fail("Failed to decode users")
@@ -69,15 +76,18 @@ func GetOrganizationUsers(organization string, email bool, client api.RESTClient
 		pageURLs = append(pageURLs, nextURL)
 
 		// Fetch next page to get updated Link header
-		limiter.AcquireConcurrentLimiter()
+		if err := limiter.WaitForTokenAndAcquire(context.Background()); err != nil {
+			continue
+		}
+		
 		response, err := client.Request("GET", nextURL, nil)
-		limiter.CheckAndHandleRateLimit(response)
-		limiter.ReleaseConcurrentLimiter()
 		if err != nil {
+			limiter.ReleaseConcurrentLimiter()
 			continue
 		}
 		linkHeader = response.Header.Get("Link")
 		response.Body.Close()
+		limiter.ReleaseAndHandleRateLimit(response)
 	}
 
 	// Fetch remaining pages concurrently
@@ -92,7 +102,10 @@ func GetOrganizationUsers(organization string, email bool, client api.RESTClient
 			go func() {
 				defer wg.Done()
 				for pageURL := range pageChan {
-					limiter.AcquireConcurrentLimiter()
+					if err := limiter.WaitForTokenAndAcquire(context.Background()); err != nil {
+						continue
+					}
+					
 					response, err := client.Request("GET", pageURL, nil)
 					if err != nil {
 						limiter.ReleaseConcurrentLimiter()
@@ -105,6 +118,8 @@ func GetOrganizationUsers(organization string, email bool, client api.RESTClient
 					decoder := json.NewDecoder(response.Body)
 					err = decoder.Decode(&pageUsers)
 					response.Body.Close()
+
+					limiter.ReleaseAndHandleRateLimit(response)
 
 					if err != nil {
 						continue
@@ -178,7 +193,11 @@ func getUserEmails(users Users) {
 		go func() {
 			defer wg.Done()
 			for index := range userChan {
-				limiter.AcquireConcurrentLimiter()
+				if err := limiter.WaitForTokenAndAcquire(context.Background()); err != nil {
+					pterm.Info.Printf("Failed to acquire rate limit token: %v\n", err)
+					continue
+				}
+				
 				url := fmt.Sprintf("users/%s", users[index].Login)
 				response, err := client.Request("GET", url, nil)
 				if err != nil {
@@ -193,6 +212,8 @@ func getUserEmails(users Users) {
 				decoder := json.NewDecoder(response.Body)
 				err = decoder.Decode(&userDetails)
 				response.Body.Close()
+
+				limiter.ReleaseAndHandleRateLimit(response)
 
 				if err != nil {
 					pterm.Error.Printf("Failed to decode user details for %s: %v\n", users[index].Login, err)
