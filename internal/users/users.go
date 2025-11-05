@@ -111,6 +111,8 @@ func GetOrganizationUsers(organization string, email bool, client api.RESTClient
 						limiter.ReleaseConcurrentLimiter()
 						continue
 					}
+					limiter.CheckAndHandleRateLimit(response)
+					limiter.ReleaseConcurrentLimiter()
 
 					var pageUsers Users
 					decoder := json.NewDecoder(response.Body)
@@ -203,6 +205,8 @@ func getUserEmails(users Users) {
 					pterm.Info.Printf("Failed to fetch user details: %v\n", err)
 					continue
 				}
+				limiter.CheckAndHandleRateLimit(response)
+				limiter.ReleaseConcurrentLimiter()
 
 				var userDetails User
 				decoder := json.NewDecoder(response.Body)

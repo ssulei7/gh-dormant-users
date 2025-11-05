@@ -101,6 +101,8 @@ func GetOrgRepositories(organization string, client api.RESTClient) Repositories
 						limiter.ReleaseConcurrentLimiter()
 						continue
 					}
+					limiter.CheckAndHandleRateLimit(response)
+					limiter.ReleaseConcurrentLimiter()
 
 					var pageRepos Repositories
 					decoder := json.NewDecoder(response.Body)
