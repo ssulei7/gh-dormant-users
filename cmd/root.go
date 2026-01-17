@@ -39,6 +39,7 @@ func init() {
 		os.Exit(1)
 	}
 	rootCmd.AddCommand(reportCmd)
+	rootCmd.AddCommand(analyzeCmd)
 	rootCmd.CompletionOptions.DisableDefaultCmd = true
 }
 
