@@ -16,6 +16,8 @@ require (
 	github.com/cli/safeexec v1.0.0 // indirect
 	github.com/cli/shurcooL-graphql v0.0.4 // indirect
 	github.com/containerd/console v1.0.3 // indirect
+	github.com/github/copilot-sdk/go v0.0.0-20260116204546-ac0e76328d07 // indirect
+	github.com/google/jsonschema-go v0.4.2 // indirect
 	github.com/gookit/color v1.5.4 // indirect
 	github.com/henvic/httpretty v0.0.6 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
