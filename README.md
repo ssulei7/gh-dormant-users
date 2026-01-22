@@ -14,13 +14,17 @@ gh extension install ssulei7/gh-dormant-users
 
 ## Usage
 
-The primary command for this extension is `report`, which generates a report of dormant users based on specified criteria.
+This extension provides two commands: `report` and `analyze`.
+
+### Report Command
+
+The `report` command generates a report of dormant users based on specified criteria.
 
 ```zsh
 gh dormant-users report [flags]
 ```
 
-### Flags
+#### Flags
 
 - `--date string`: The date from which to start looking for activity. Max 3 months in the past. (required)
 - `-e, --email`: Check if user has an email.

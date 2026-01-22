@@ -3,9 +3,9 @@ package cmd
 import (
 	"os"
 
-	"github.com/pterm/pterm"
 	"github.com/spf13/cobra"
 	"github.com/ssulei7/gh-dormant-users/internal/analysis"
+	"github.com/ssulei7/gh-dormant-users/internal/ui"
 )
 
 var analyzeCmd = &cobra.Command{
@@ -51,13 +51,13 @@ func runAnalyze(cmd *cobra.Command, args []string) {
 	// Validate required flags
 	csvFile, _ := cmd.Flags().GetString("file")
 	if csvFile == "" {
-		pterm.Error.Println("CSV file path is required. Use --file or -f flag.")
+		ui.Error("CSV file path is required. Use --file or -f flag.")
 		os.Exit(1)
 	}
 
 	// Check if file exists
 	if _, err := os.Stat(csvFile); os.IsNotExist(err) {
-		pterm.Error.Printf("CSV file not found: %s\n", csvFile)
+		ui.Error("CSV file not found: %s", csvFile)
 		os.Exit(1)
 	}
 
@@ -69,36 +69,37 @@ func runAnalyze(cmd *cobra.Command, args []string) {
 	if promptOnly {
 		prompt, err := analyzer.BuildPrompt(csvFile, templateName, customPrompt)
 		if err != nil {
-			pterm.Error.Printf("Failed to build prompt: %v\n", err)
+			ui.Error("Failed to build prompt: %v", err)
 			os.Exit(1)
 		}
-		pterm.DefaultHeader.WithFullWidth().Println("Generated Analysis Prompt")
-		pterm.Println()
-		pterm.Println(prompt)
+		ui.Header("Generated Analysis Prompt")
+		ui.Println()
+		ui.Println(prompt)
 		return
 	}
 
 	// Check Copilot availability for actual analysis
 	if !analyzer.IsCopilotAvailable() {
-		pterm.Error.Println("GitHub Copilot CLI is not available.")
-		pterm.Info.Println("Install it with: gh extension install github/gh-copilot")
+		ui.Error("GitHub Copilot CLI is not available.")
+		ui.Info("Install it with: gh extension install github/gh-copilot")
 		os.Exit(1)
 	}
 
 	// Perform the analysis using Copilot SDK
-	pterm.Info.Println("Analyzing CSV with Copilot...")
-	spinner, _ := pterm.DefaultSpinner.Start("Sending to Copilot for analysis...")
+	ui.Info("Analyzing CSV with Copilot...")
+	spinner := ui.NewSimpleSpinner("Sending to Copilot for analysis...")
+	spinner.Start()
 
 	response, err := analyzer.AnalyzeCSV(csvFile, templateName, customPrompt)
 	if err != nil {
-		spinner.Fail("Analysis failed")
-		pterm.Error.Printf("Analysis failed: %v\n", err)
+		spinner.StopFail("Analysis failed")
+		ui.Error("Analysis failed: %v", err)
 		os.Exit(1)
 	}
 
-	spinner.Success("Analysis complete")
-	pterm.Println()
-	pterm.DefaultHeader.WithFullWidth().Println("Analysis Results")
-	pterm.Println()
-	pterm.Println(response)
+	spinner.Stop("Analysis complete")
+	ui.Println()
+	ui.Header("Analysis Results")
+	ui.Println()
+	ui.Println(response)
 }

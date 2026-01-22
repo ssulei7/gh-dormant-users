@@ -1,16 +1,15 @@
 package pullrequests
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
 
 	"github.com/cli/go-gh/pkg/api"
-	"github.com/pterm/pterm"
 	"github.com/ssulei7/gh-dormant-users/internal/header"
 	"github.com/ssulei7/gh-dormant-users/internal/limiter"
+	"github.com/ssulei7/gh-dormant-users/internal/ui"
 )
 
 type PullRequestComment struct {
@@ -28,11 +27,7 @@ func GetPullRequestCommentsSinceDate(organization string, repo string, date stri
 	var allPullRequestComments PullRequestComments
 	url := fmt.Sprintf("repos/%s/%s/pulls/comments?per_page=100&since=%s", organization, repo, date)
 	for {
-		if err := limiter.WaitForTokenAndAcquire(context.Background()); err != nil {
-			pterm.Error.Printf("Failed to acquire rate limit token: %v\n", err)
-			return nil
-		}
-		
+		limiter.AcquireConcurrentLimiter()
 		response, err := client.Request("GET", url, nil)
 		if err != nil {
 			limiter.ReleaseConcurrentLimiter()
@@ -48,11 +43,11 @@ func GetPullRequestCommentsSinceDate(organization string, repo string, date stri
 		err = decoder.Decode(&pullRequestComments)
 		linkHeader := response.Header.Get("Link")
 		response.Body.Close()
-
-		limiter.ReleaseAndHandleRateLimit(response)
+		limiter.ReleaseConcurrentLimiter()
+		limiter.CheckAndHandleRateLimit(response)
 
 		if err != nil {
-			pterm.Error.Printf("Failed to decode pull request comments: %v\n", err)
+			ui.Error("Failed to decode pull request comments: %v", err)
 			os.Exit(1)
 		}
 

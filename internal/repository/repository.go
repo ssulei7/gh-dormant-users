@@ -1,16 +1,15 @@
 package repository
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"sync"
 
 	"github.com/cli/go-gh/pkg/api"
-	"github.com/pterm/pterm"
 	"github.com/ssulei7/gh-dormant-users/internal/header"
 	"github.com/ssulei7/gh-dormant-users/internal/limiter"
+	"github.com/ssulei7/gh-dormant-users/internal/ui"
 )
 
 type Repository struct {
@@ -21,21 +20,17 @@ type Repositories []Repository
 
 func GetOrgRepositories(organization string, client api.RESTClient) Repositories {
 	// Start the spinner
-	spinner, _ := pterm.DefaultSpinner.Start("Fetching repositories...")
+	spinner := ui.NewSimpleSpinner("Fetching repositories...")
+	spinner.Start()
 
 	// Fetch first page
 	url := fmt.Sprintf("orgs/%s/repos?per_page=100", organization)
-	if err := limiter.WaitForTokenAndAcquire(context.Background()); err != nil {
-		spinner.Fail("Failed to acquire rate limit token")
-		pterm.Error.Printf("Failed to acquire rate limit token: %v\n", err)
-		os.Exit(1)
-	}
-	
+	limiter.AcquireConcurrentLimiter()
 	response, err := client.Request("GET", url, nil)
 	if err != nil {
 		limiter.ReleaseConcurrentLimiter()
-		spinner.Fail("Failed to fetch repositories")
-		pterm.Error.Printf("Failed to fetch repositories: %v\n", err)
+		spinner.StopFail("Failed to fetch repositories")
+		ui.Error("Failed to fetch repositories: %v", err)
 		os.Exit(1)
 	}
 
@@ -44,12 +39,12 @@ func GetOrgRepositories(organization string, client api.RESTClient) Repositories
 	err = decoder.Decode(&repositories)
 	linkHeader := response.Header.Get("Link")
 	response.Body.Close()
-
-	limiter.ReleaseAndHandleRateLimit(response)
+	limiter.ReleaseConcurrentLimiter()
+	limiter.CheckAndHandleRateLimit(response)
 
 	if err != nil {
-		spinner.Fail("Failed to decode repositories")
-		pterm.Error.Printf("Failed to decode repositories: %v\n", err)
+		spinner.StopFail("Failed to decode repositories")
+		ui.Error("Failed to decode repositories: %v", err)
 		os.Exit(1)
 	}
 
@@ -66,10 +61,7 @@ func GetOrgRepositories(organization string, client api.RESTClient) Repositories
 		pageURLs = append(pageURLs, nextURL)
 
 		// Fetch next page to get updated Link header
-		if err := limiter.WaitForTokenAndAcquire(context.Background()); err != nil {
-			continue
-		}
-		
+		limiter.AcquireConcurrentLimiter()
 		response, err := client.Request("GET", nextURL, nil)
 		if err != nil {
 			limiter.ReleaseConcurrentLimiter()
@@ -77,7 +69,8 @@ func GetOrgRepositories(organization string, client api.RESTClient) Repositories
 		}
 		linkHeader = response.Header.Get("Link")
 		response.Body.Close()
-		limiter.ReleaseAndHandleRateLimit(response)
+		limiter.ReleaseConcurrentLimiter()
+		limiter.CheckAndHandleRateLimit(response)
 	}
 
 	// Fetch remaining pages concurrently
@@ -92,24 +85,19 @@ func GetOrgRepositories(organization string, client api.RESTClient) Repositories
 			go func() {
 				defer wg.Done()
 				for pageURL := range pageChan {
-					if err := limiter.WaitForTokenAndAcquire(context.Background()); err != nil {
-						continue
-					}
-					
+					limiter.AcquireConcurrentLimiter()
 					response, err := client.Request("GET", pageURL, nil)
 					if err != nil {
 						limiter.ReleaseConcurrentLimiter()
 						continue
 					}
-					limiter.CheckAndHandleRateLimit(response)
-					limiter.ReleaseConcurrentLimiter()
 
 					var pageRepos Repositories
 					decoder := json.NewDecoder(response.Body)
 					err = decoder.Decode(&pageRepos)
 					response.Body.Close()
-
-					limiter.ReleaseAndHandleRateLimit(response)
+					limiter.ReleaseConcurrentLimiter()
+					limiter.CheckAndHandleRateLimit(response)
 
 					if err != nil {
 						continue
@@ -131,7 +119,7 @@ func GetOrgRepositories(organization string, client api.RESTClient) Repositories
 		}
 	}
 
-	spinner.Success("Fetched repositories successfully")
-	pterm.Info.Printf("Fetched %d repositories\n", len(allRepositories))
+	spinner.Stop("Fetched repositories successfully")
+	ui.Info("Fetched %d repositories", len(allRepositories))
 	return allRepositories
 }

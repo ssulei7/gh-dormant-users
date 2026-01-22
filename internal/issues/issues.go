@@ -1,16 +1,15 @@
 package issues
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
 
 	"github.com/cli/go-gh/pkg/api"
-	"github.com/pterm/pterm"
 	"github.com/ssulei7/gh-dormant-users/internal/header"
 	"github.com/ssulei7/gh-dormant-users/internal/limiter"
+	"github.com/ssulei7/gh-dormant-users/internal/ui"
 )
 
 type Issue struct {
@@ -39,11 +38,7 @@ func GetIssuesSinceDate(organization string, repo string, date string, client ap
 	var allIssues Issues
 	url := fmt.Sprintf("repos/%s/%s/issues?per_page=100&since=%s", organization, repo, date)
 	for {
-		if err := limiter.WaitForTokenAndAcquire(context.Background()); err != nil {
-			pterm.Error.Printf("Failed to acquire rate limit token: %v\n", err)
-			return nil
-		}
-		
+		limiter.AcquireConcurrentLimiter()
 		response, err := client.Request("GET", url, nil)
 		if err != nil {
 			limiter.ReleaseConcurrentLimiter()
@@ -59,11 +54,11 @@ func GetIssuesSinceDate(organization string, repo string, date string, client ap
 		err = decoder.Decode(&issues)
 		linkHeader := response.Header.Get("Link")
 		response.Body.Close()
-
-		limiter.ReleaseAndHandleRateLimit(response)
+		limiter.ReleaseConcurrentLimiter()
+		limiter.CheckAndHandleRateLimit(response)
 
 		if err != nil {
-			pterm.Error.Printf("Failed to decode issues: %v\n", err)
+			ui.Error("Failed to decode issues: %v", err)
 			os.Exit(1)
 		}
 
@@ -88,11 +83,7 @@ func GetIssueCommentsSinceDate(organization string, repo string, date string, cl
 	var allIssueComments IssueComments
 	url := fmt.Sprintf("repos/%s/%s/issues/comments?per_page=100&since=%s", organization, repo, date)
 	for {
-		if err := limiter.WaitForTokenAndAcquire(context.Background()); err != nil {
-			pterm.Error.Printf("Failed to acquire rate limit token: %v\n", err)
-			return nil
-		}
-
+		limiter.AcquireConcurrentLimiter()
 		response, err := client.Request("GET", url, nil)
 		if err != nil {
 			limiter.ReleaseConcurrentLimiter()
@@ -108,11 +99,11 @@ func GetIssueCommentsSinceDate(organization string, repo string, date string, cl
 		err = decoder.Decode(&issueComments)
 		linkHeader := response.Header.Get("Link")
 		response.Body.Close()
-
-		limiter.ReleaseAndHandleRateLimit(response)
+		limiter.ReleaseConcurrentLimiter()
+		limiter.CheckAndHandleRateLimit(response)
 
 		if err != nil {
-			pterm.Error.Printf("Failed to decode issue comments: %v\n", err)
+			ui.Error("Failed to decode issue comments: %v", err)
 			os.Exit(1)
 		}
 

@@ -10,14 +10,14 @@ import (
 
 // CSVStats holds pre-aggregated statistics from a dormant users CSV
 type CSVStats struct {
-	TotalUsers       int
-	ActiveUsers      int
-	DormantUsers     int
-	DormantPercent   float64
-	UsersWithEmail   int
-	ActivityCounts   map[string]int // counts per activity type
-	TopActiveUsers   []UserSummary  // sample of active users (max 10)
-	TopDormantUsers  []UserSummary  // sample of dormant users (max 10)
+	TotalUsers      int
+	ActiveUsers     int
+	DormantUsers    int
+	DormantPercent  float64
+	UsersWithEmail  int
+	ActivityCounts  map[string]int // counts per activity type
+	TopActiveUsers  []UserSummary  // sample of active users (max 10)
+	TopDormantUsers []UserSummary  // sample of dormant users (max 10)
 }
 
 // UserSummary is a condensed view of a user for samples

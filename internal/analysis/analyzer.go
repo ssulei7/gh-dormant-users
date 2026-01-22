@@ -6,7 +6,7 @@ import (
 	"time"
 
 	copilot "github.com/github/copilot-sdk/go"
-	"github.com/pterm/pterm"
+	"github.com/ssulei7/gh-dormant-users/internal/ui"
 )
 
 // DefaultTimeout is the maximum time to wait for a Copilot response
@@ -168,26 +168,21 @@ func (a *Analyzer) BuildPrompt(csvPath string, templateName string, customPrompt
 
 // ListTemplates displays available templates
 func (a *Analyzer) ListTemplates() {
-	pterm.DefaultHeader.WithFullWidth().Println("Available Analysis Templates")
-	pterm.Println()
-
-	tableData := pterm.TableData{
-		{"Template", "Description"},
-	}
+	ui.Header("Available Analysis Templates")
+	ui.Println()
 
 	for name, template := range PredefinedTemplates {
-		tableData = append(tableData, []string{name, template.Description})
+		ui.Printf("  %s - %s\n", name, template.Description)
 	}
-
-	pterm.DefaultTable.WithHasHeader().WithData(tableData).Render()
+	ui.Println()
 }
 
 // CheckCopilotStatus displays the Copilot CLI availability status
 func (a *Analyzer) CheckCopilotStatus() {
 	if a.copilotAvailable {
-		pterm.Success.Println("GitHub Copilot CLI is available")
+		ui.Success("GitHub Copilot CLI is available")
 	} else {
-		pterm.Warning.Println("GitHub Copilot CLI is not available")
-		pterm.Info.Println("Install it with: gh extension install github/gh-copilot")
+		ui.Warning("GitHub Copilot CLI is not available")
+		ui.Info("Install it with: gh extension install github/gh-copilot")
 	}
 }
