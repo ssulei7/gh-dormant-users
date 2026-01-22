@@ -144,8 +144,11 @@ func (s *CSVStats) FormatForPrompt() string {
 	sb.WriteString(fmt.Sprintf("- Total Users: %d\n", s.TotalUsers))
 	sb.WriteString(fmt.Sprintf("- Active Users: %d (%.1f%%)\n", s.ActiveUsers, 100-s.DormantPercent))
 	sb.WriteString(fmt.Sprintf("- Dormant Users: %d (%.1f%%)\n", s.DormantUsers, s.DormantPercent))
-	sb.WriteString(fmt.Sprintf("- Users with Email: %d (%.1f%%)\n\n", s.UsersWithEmail,
-		float64(s.UsersWithEmail)/float64(s.TotalUsers)*100))
+	emailPercent := 0.0
+	if s.TotalUsers > 0 {
+		emailPercent = float64(s.UsersWithEmail) / float64(s.TotalUsers) * 100
+	}
+	sb.WriteString(fmt.Sprintf("- Users with Email: %d (%.1f%%)\n\n", s.UsersWithEmail, emailPercent))
 
 	// Activity breakdown
 	if len(s.ActivityCounts) > 0 {
