@@ -1,17 +1,15 @@
 package users
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"sync"
 
 	"github.com/cli/go-gh"
 	"github.com/cli/go-gh/pkg/api"
-	"github.com/pterm/pterm"
 	"github.com/ssulei7/gh-dormant-users/internal/header"
 	"github.com/ssulei7/gh-dormant-users/internal/limiter"
+	"github.com/ssulei7/gh-dormant-users/internal/ui"
 )
 
 type User struct {
@@ -20,34 +18,30 @@ type User struct {
 	Email         string `json:"email"`
 	Active        bool
 	ActivityTypes map[string]bool
+	mu            sync.Mutex // protects Active and ActivityTypes
 }
 
 type Users []User
 
-func GetOrganizationUsers(organization string, email bool, client api.RESTClient) Users {
-	pterm.Info.Printf("Starting to fetch users for organization: %s\n", organization)
+func GetOrganizationUsers(organization string, email bool, client api.RESTClient) (Users, error) {
+	ui.Info("Starting to fetch users for organization: %s", organization)
 
 	// Start the spinner
-	spinner, _ := pterm.DefaultSpinner.Start("Fetching users...")
+	spinner := ui.NewSimpleSpinner("Fetching users...")
+	spinner.Start()
 
 	if email {
-		pterm.Info.Println("Getting user emails, if present")
+		ui.Info("Getting user emails, if present")
 	}
 
 	// Fetch first page to get total count
 	url := fmt.Sprintf("orgs/%s/members?per_page=100", organization)
-	if err := limiter.WaitForTokenAndAcquire(context.Background()); err != nil {
-		spinner.Fail("Failed to acquire rate limit token")
-		pterm.Error.Printf("Failed to acquire rate limit token: %v\n", err)
-		os.Exit(1)
-	}
-	
+	limiter.AcquireConcurrentLimiter()
 	response, err := client.Request("GET", url, nil)
 	if err != nil {
 		limiter.ReleaseConcurrentLimiter()
-		spinner.Fail("Failed to fetch users")
-		pterm.Error.Printf("Failed to fetch users: %v\n", err)
-		os.Exit(1)
+		spinner.StopFail("Failed to fetch users")
+		return nil, fmt.Errorf("failed to fetch users: %w", err)
 	}
 
 	var users Users
@@ -55,12 +49,12 @@ func GetOrganizationUsers(organization string, email bool, client api.RESTClient
 	err = decoder.Decode(&users)
 	linkHeader := response.Header.Get("Link")
 	response.Body.Close()
-
-	limiter.ReleaseAndHandleRateLimit(response)
+	limiter.ReleaseConcurrentLimiter()
+	limiter.CheckAndHandleRateLimit(response)
 
 	if err != nil {
-		spinner.Fail("Failed to decode users")
-		pterm.PrintOnErrorf("Failed to decode users: %v\n", err)
+		spinner.StopFail("Failed to decode users")
+		return nil, fmt.Errorf("failed to decode users: %w", err)
 	}
 
 	allUsers := make(Users, len(users))
@@ -76,18 +70,17 @@ func GetOrganizationUsers(organization string, email bool, client api.RESTClient
 		pageURLs = append(pageURLs, nextURL)
 
 		// Fetch next page to get updated Link header
-		if err := limiter.WaitForTokenAndAcquire(context.Background()); err != nil {
-			continue
-		}
-		
+		limiter.AcquireConcurrentLimiter()
 		response, err := client.Request("GET", nextURL, nil)
 		if err != nil {
 			limiter.ReleaseConcurrentLimiter()
+			ui.Warning("Failed to fetch page %s: %v", nextURL, err)
 			continue
 		}
 		linkHeader = response.Header.Get("Link")
 		response.Body.Close()
-		limiter.ReleaseAndHandleRateLimit(response)
+		limiter.ReleaseConcurrentLimiter()
+		limiter.CheckAndHandleRateLimit(response)
 	}
 
 	// Fetch remaining pages concurrently
@@ -102,26 +95,23 @@ func GetOrganizationUsers(organization string, email bool, client api.RESTClient
 			go func() {
 				defer wg.Done()
 				for pageURL := range pageChan {
-					if err := limiter.WaitForTokenAndAcquire(context.Background()); err != nil {
-						continue
-					}
-					
+					limiter.AcquireConcurrentLimiter()
 					response, err := client.Request("GET", pageURL, nil)
 					if err != nil {
 						limiter.ReleaseConcurrentLimiter()
+						ui.Warning("Failed to fetch page %s: %v", pageURL, err)
 						continue
 					}
-					limiter.CheckAndHandleRateLimit(response)
-					limiter.ReleaseConcurrentLimiter()
 
 					var pageUsers Users
 					decoder := json.NewDecoder(response.Body)
 					err = decoder.Decode(&pageUsers)
 					response.Body.Close()
-
-					limiter.ReleaseAndHandleRateLimit(response)
+					limiter.ReleaseConcurrentLimiter()
+					limiter.CheckAndHandleRateLimit(response)
 
 					if err != nil {
+						ui.Warning("Failed to decode page %s: %v", pageURL, err)
 						continue
 					}
 					resultChan <- pageUsers
@@ -143,30 +133,58 @@ func GetOrganizationUsers(organization string, email bool, client api.RESTClient
 
 	// get user emails
 	if email {
-		getUserEmails(allUsers)
+		if err := getUserEmails(allUsers); err != nil {
+			spinner.StopFail("Failed to get user emails")
+			return nil, err
+		}
 	}
 
-	spinner.Success("Fetched users successfully")
+	spinner.Stop("Fetched users successfully")
 
-	return allUsers
+	return allUsers, nil
 }
 
 func (u *User) MakeActive() {
+	u.mu.Lock()
+	defer u.mu.Unlock()
 	u.Active = true
 }
 
 func (u *User) MakeInactive() {
+	u.mu.Lock()
+	defer u.mu.Unlock()
 	u.Active = false
 }
 
+func (u *User) IsActive() bool {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	return u.Active
+}
+
 func (u *User) AddActivityType(t string) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
 	if u.ActivityTypes == nil {
 		u.ActivityTypes = make(map[string]bool)
 	}
 	u.ActivityTypes[t] = true
 }
 
+// MarkActiveWithType atomically adds activity type and marks user active
+func (u *User) MarkActiveWithType(t string) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	if u.ActivityTypes == nil {
+		u.ActivityTypes = make(map[string]bool)
+	}
+	u.ActivityTypes[t] = true
+	u.Active = true
+}
+
 func (u *User) GetActivityTypes() []string {
+	u.mu.Lock()
+	defer u.mu.Unlock()
 	if u.ActivityTypes == nil {
 		return nil
 	}
@@ -177,11 +195,10 @@ func (u *User) GetActivityTypes() []string {
 	return atSlice
 }
 
-func getUserEmails(users Users) {
+func getUserEmails(users Users) error {
 	client, err := gh.RESTClient(nil)
 	if err != nil {
-		pterm.Error.Printf("Failed to create REST client: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("failed to create REST client: %w", err)
 	}
 
 	var wg sync.WaitGroup
@@ -193,30 +210,24 @@ func getUserEmails(users Users) {
 		go func() {
 			defer wg.Done()
 			for index := range userChan {
-				if err := limiter.WaitForTokenAndAcquire(context.Background()); err != nil {
-					pterm.Info.Printf("Failed to acquire rate limit token: %v\n", err)
-					continue
-				}
-				
+				limiter.AcquireConcurrentLimiter()
 				url := fmt.Sprintf("users/%s", users[index].Login)
 				response, err := client.Request("GET", url, nil)
 				if err != nil {
 					limiter.ReleaseConcurrentLimiter()
-					pterm.Info.Printf("Failed to fetch user details: %v\n", err)
+					ui.Warning("Failed to fetch user details for %s: %v", users[index].Login, err)
 					continue
 				}
-				limiter.CheckAndHandleRateLimit(response)
-				limiter.ReleaseConcurrentLimiter()
 
 				var userDetails User
 				decoder := json.NewDecoder(response.Body)
 				err = decoder.Decode(&userDetails)
 				response.Body.Close()
-
-				limiter.ReleaseAndHandleRateLimit(response)
+				limiter.ReleaseConcurrentLimiter()
+				limiter.CheckAndHandleRateLimit(response)
 
 				if err != nil {
-					pterm.Error.Printf("Failed to decode user details for %s: %v\n", users[index].Login, err)
+					ui.Warning("Failed to decode user details for %s: %v", users[index].Login, err)
 					continue
 				}
 
@@ -230,4 +241,5 @@ func getUserEmails(users Users) {
 	}
 	close(userChan)
 	wg.Wait()
+	return nil
 }

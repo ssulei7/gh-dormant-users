@@ -14,13 +14,17 @@ gh extension install ssulei7/gh-dormant-users
 
 ## Usage
 
-The primary command for this extension is `report`, which generates a report of dormant users based on specified criteria.
+This extension provides two commands: `report` and `analyze`.
+
+### Report Command
+
+The `report` command generates a report of dormant users based on specified criteria.
 
 ```zsh
 gh dormant-users report [flags]
 ```
 
-### Flags
+#### Flags
 
 - `--date string`: The date from which to start looking for activity. Max 3 months in the past. (required)
 - `-e, --email`: Check if user has an email.
@@ -59,6 +63,71 @@ The generated CSV file has the following schema:
 - **Email**: The email address of the user (if available).
 - **Active**: A boolean value indicating whether the user is active or not.
 - **ActivityTypes**: A comma-separated list of activity types (commits, issues, issue-comments, pr-comments) for each user.
+
+---
+
+## Analyze Command
+
+The `analyze` command uses GitHub Copilot to provide AI-powered analysis of your dormant user CSV reports.
+
+```zsh
+gh dormant-users analyze [flags]
+```
+
+### Prerequisites
+
+The analyze command requires the GitHub Copilot CLI, it can be found here:
+https://github.com/github/copilot-cli
+
+### Flags
+
+- `-f, --file string`: Path to the CSV file to analyze (required)
+- `-t, --template string`: Analysis template to use (default: "summary")
+- `-p, --prompt string`: Custom prompt (only used with 'custom' template)
+- `--list-templates`: List available analysis templates
+- `--check-copilot`: Check if Copilot CLI is available
+- `--prompt-only`: Generate the prompt without sending to Copilot (useful for debugging)
+
+### Analysis Templates
+
+| Template | Description |
+|----------|-------------|
+| `summary` | Executive summary with key metrics and health assessment |
+| `trends` | Activity patterns and engagement recommendations |
+| `risk` | Security and compliance risk assessment |
+| `recommendations` | Actionable steps for user lifecycle management |
+| `custom` | Custom analysis with your own prompt |
+
+### Examples
+
+**Generate a summary analysis:**
+```zsh
+gh dormant-users analyze -f myorg-dormant-users.csv -t summary
+```
+
+**Get security risk assessment:**
+```zsh
+gh dormant-users analyze -f myorg-dormant-users.csv -t risk
+```
+
+**Run custom analysis:**
+```zsh
+gh dormant-users analyze -f myorg-dormant-users.csv -t custom -p "Which teams have the highest dormancy rates?"
+```
+
+**List available templates:**
+```zsh
+gh dormant-users analyze --list-templates
+```
+
+**Preview the prompt without calling Copilot:**
+```zsh
+gh dormant-users analyze -f myorg-dormant-users.csv -t summary --prompt-only
+```
+
+For more details on how the analyzer works, see [docs/analyzer.md](docs/analyzer.md).
+
+---
 
 ## Contributing
 
