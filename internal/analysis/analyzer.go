@@ -2,7 +2,6 @@ package analysis
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	copilot "github.com/github/copilot-sdk/go"
@@ -84,58 +83,17 @@ func (a *Analyzer) sendToCopilot(prompt string) (string, error) {
 	}
 	defer session.Destroy()
 
-	// Collect response with timeout protection
-	var response strings.Builder
-	done := make(chan bool)
-	var responseErr error
-
-	session.On(func(event copilot.SessionEvent) {
-		if event.Type == "assistant.message" {
-			if event.Data.Content != nil {
-				response.WriteString(*event.Data.Content)
-			}
-		}
-		if event.Type == "session.idle" {
-			select {
-			case <-done:
-				// Already closed
-			default:
-				close(done)
-			}
-		}
-		if event.Type == "error" {
-			if event.Data.Content != nil {
-				responseErr = fmt.Errorf("copilot error: %s", *event.Data.Content)
-			}
-			select {
-			case <-done:
-				// Already closed
-			default:
-				close(done)
-			}
-		}
-	})
-
-	_, err = session.Send(copilot.MessageOptions{
+	response, err := session.SendAndWait(copilot.MessageOptions{
 		Prompt: prompt,
-	})
+	}, DefaultTimeout)
 	if err != nil {
-		return "", fmt.Errorf("failed to send message to Copilot: %w", err)
+		return "", fmt.Errorf("copilot error: %w", err)
 	}
 
-	// Wait for response with timeout
-	select {
-	case <-done:
-		// Response received
-	case <-time.After(DefaultTimeout):
-		return "", fmt.Errorf("timeout waiting for Copilot response (exceeded %v)", DefaultTimeout)
+	if response != nil && response.Data.Content != nil {
+		return *response.Data.Content, nil
 	}
-
-	if responseErr != nil {
-		return "", responseErr
-	}
-
-	return response.String(), nil
+	return "", nil
 }
 
 // BuildPrompt builds a prompt from a template and CSV data without sending to Copilot

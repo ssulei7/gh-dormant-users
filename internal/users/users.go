@@ -3,7 +3,6 @@ package users
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"sync"
 
 	"github.com/cli/go-gh"
@@ -19,11 +18,12 @@ type User struct {
 	Email         string `json:"email"`
 	Active        bool
 	ActivityTypes map[string]bool
+	mu            sync.Mutex // protects Active and ActivityTypes
 }
 
 type Users []User
 
-func GetOrganizationUsers(organization string, email bool, client api.RESTClient) Users {
+func GetOrganizationUsers(organization string, email bool, client api.RESTClient) (Users, error) {
 	ui.Info("Starting to fetch users for organization: %s", organization)
 
 	// Start the spinner
@@ -41,8 +41,7 @@ func GetOrganizationUsers(organization string, email bool, client api.RESTClient
 	if err != nil {
 		limiter.ReleaseConcurrentLimiter()
 		spinner.StopFail("Failed to fetch users")
-		ui.Error("Failed to fetch users: %v", err)
-		os.Exit(1)
+		return nil, fmt.Errorf("failed to fetch users: %w", err)
 	}
 
 	var users Users
@@ -55,7 +54,7 @@ func GetOrganizationUsers(organization string, email bool, client api.RESTClient
 
 	if err != nil {
 		spinner.StopFail("Failed to decode users")
-		ui.Error("Failed to decode users: %v", err)
+		return nil, fmt.Errorf("failed to decode users: %w", err)
 	}
 
 	allUsers := make(Users, len(users))
@@ -75,6 +74,7 @@ func GetOrganizationUsers(organization string, email bool, client api.RESTClient
 		response, err := client.Request("GET", nextURL, nil)
 		if err != nil {
 			limiter.ReleaseConcurrentLimiter()
+			ui.Warning("Failed to fetch page %s: %v", nextURL, err)
 			continue
 		}
 		linkHeader = response.Header.Get("Link")
@@ -99,6 +99,7 @@ func GetOrganizationUsers(organization string, email bool, client api.RESTClient
 					response, err := client.Request("GET", pageURL, nil)
 					if err != nil {
 						limiter.ReleaseConcurrentLimiter()
+						ui.Warning("Failed to fetch page %s: %v", pageURL, err)
 						continue
 					}
 
@@ -110,6 +111,7 @@ func GetOrganizationUsers(organization string, email bool, client api.RESTClient
 					limiter.CheckAndHandleRateLimit(response)
 
 					if err != nil {
+						ui.Warning("Failed to decode page %s: %v", pageURL, err)
 						continue
 					}
 					resultChan <- pageUsers
@@ -131,30 +133,58 @@ func GetOrganizationUsers(organization string, email bool, client api.RESTClient
 
 	// get user emails
 	if email {
-		getUserEmails(allUsers)
+		if err := getUserEmails(allUsers); err != nil {
+			spinner.StopFail("Failed to get user emails")
+			return nil, err
+		}
 	}
 
 	spinner.Stop("Fetched users successfully")
 
-	return allUsers
+	return allUsers, nil
 }
 
 func (u *User) MakeActive() {
+	u.mu.Lock()
+	defer u.mu.Unlock()
 	u.Active = true
 }
 
 func (u *User) MakeInactive() {
+	u.mu.Lock()
+	defer u.mu.Unlock()
 	u.Active = false
 }
 
+func (u *User) IsActive() bool {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	return u.Active
+}
+
 func (u *User) AddActivityType(t string) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
 	if u.ActivityTypes == nil {
 		u.ActivityTypes = make(map[string]bool)
 	}
 	u.ActivityTypes[t] = true
 }
 
+// MarkActiveWithType atomically adds activity type and marks user active
+func (u *User) MarkActiveWithType(t string) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	if u.ActivityTypes == nil {
+		u.ActivityTypes = make(map[string]bool)
+	}
+	u.ActivityTypes[t] = true
+	u.Active = true
+}
+
 func (u *User) GetActivityTypes() []string {
+	u.mu.Lock()
+	defer u.mu.Unlock()
 	if u.ActivityTypes == nil {
 		return nil
 	}
@@ -165,11 +195,10 @@ func (u *User) GetActivityTypes() []string {
 	return atSlice
 }
 
-func getUserEmails(users Users) {
+func getUserEmails(users Users) error {
 	client, err := gh.RESTClient(nil)
 	if err != nil {
-		ui.Error("Failed to create REST client: %v", err)
-		os.Exit(1)
+		return fmt.Errorf("failed to create REST client: %w", err)
 	}
 
 	var wg sync.WaitGroup
@@ -186,7 +215,7 @@ func getUserEmails(users Users) {
 				response, err := client.Request("GET", url, nil)
 				if err != nil {
 					limiter.ReleaseConcurrentLimiter()
-					ui.Info("Failed to fetch user details: %v", err)
+					ui.Warning("Failed to fetch user details for %s: %v", users[index].Login, err)
 					continue
 				}
 
@@ -198,7 +227,7 @@ func getUserEmails(users Users) {
 				limiter.CheckAndHandleRateLimit(response)
 
 				if err != nil {
-					ui.Error("Failed to decode user details for %s: %v", users[index].Login, err)
+					ui.Warning("Failed to decode user details for %s: %v", users[index].Login, err)
 					continue
 				}
 
@@ -212,4 +241,5 @@ func getUserEmails(users Users) {
 	}
 	close(userChan)
 	wg.Wait()
+	return nil
 }

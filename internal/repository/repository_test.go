@@ -105,7 +105,10 @@ func TestGetOrgRepositories_SinglePage(t *testing.T) {
 		},
 	}
 
-	repos := GetOrgRepositories(org, mockClient)
+	repos, err := GetOrgRepositories(org, mockClient)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	names := sortedRepoNames(repos)
 
 	expected := []string{"repo-one", "repo-two"}
@@ -136,7 +139,10 @@ func TestGetOrgRepositories_MultiplePages(t *testing.T) {
 		},
 	}
 
-	repos := GetOrgRepositories(org, mockClient)
+	repos, err := GetOrgRepositories(org, mockClient)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	names := sortedRepoNames(repos)
 
 	expected := []string{"repo-one", "repo-three", "repo-two"}

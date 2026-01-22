@@ -3,7 +3,6 @@ package repository
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"sync"
 
 	"github.com/cli/go-gh/pkg/api"
@@ -18,7 +17,7 @@ type Repository struct {
 
 type Repositories []Repository
 
-func GetOrgRepositories(organization string, client api.RESTClient) Repositories {
+func GetOrgRepositories(organization string, client api.RESTClient) (Repositories, error) {
 	// Start the spinner
 	spinner := ui.NewSimpleSpinner("Fetching repositories...")
 	spinner.Start()
@@ -30,8 +29,7 @@ func GetOrgRepositories(organization string, client api.RESTClient) Repositories
 	if err != nil {
 		limiter.ReleaseConcurrentLimiter()
 		spinner.StopFail("Failed to fetch repositories")
-		ui.Error("Failed to fetch repositories: %v", err)
-		os.Exit(1)
+		return nil, fmt.Errorf("failed to fetch repositories: %w", err)
 	}
 
 	var repositories Repositories
@@ -44,8 +42,7 @@ func GetOrgRepositories(organization string, client api.RESTClient) Repositories
 
 	if err != nil {
 		spinner.StopFail("Failed to decode repositories")
-		ui.Error("Failed to decode repositories: %v", err)
-		os.Exit(1)
+		return nil, fmt.Errorf("failed to decode repositories: %w", err)
 	}
 
 	allRepositories := make(Repositories, len(repositories))
@@ -65,6 +62,7 @@ func GetOrgRepositories(organization string, client api.RESTClient) Repositories
 		response, err := client.Request("GET", nextURL, nil)
 		if err != nil {
 			limiter.ReleaseConcurrentLimiter()
+			ui.Warning("Failed to fetch page %s: %v", nextURL, err)
 			continue
 		}
 		linkHeader = response.Header.Get("Link")
@@ -89,6 +87,7 @@ func GetOrgRepositories(organization string, client api.RESTClient) Repositories
 					response, err := client.Request("GET", pageURL, nil)
 					if err != nil {
 						limiter.ReleaseConcurrentLimiter()
+						ui.Warning("Failed to fetch page %s: %v", pageURL, err)
 						continue
 					}
 
@@ -100,6 +99,7 @@ func GetOrgRepositories(organization string, client api.RESTClient) Repositories
 					limiter.CheckAndHandleRateLimit(response)
 
 					if err != nil {
+						ui.Warning("Failed to decode page %s: %v", pageURL, err)
 						continue
 					}
 					resultChan <- pageRepos
@@ -121,5 +121,5 @@ func GetOrgRepositories(organization string, client api.RESTClient) Repositories
 
 	spinner.Stop("Fetched repositories successfully")
 	ui.Info("Fetched %d repositories", len(allRepositories))
-	return allRepositories
+	return allRepositories, nil
 }

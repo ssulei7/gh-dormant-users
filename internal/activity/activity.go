@@ -16,13 +16,19 @@ import (
 	"github.com/ssulei7/gh-dormant-users/internal/users"
 )
 
-var (
-	activeUsers    map[string]bool
-	activeUsersMux sync.RWMutex
-)
+// ActivityChecker encapsulates activity checking state
+type ActivityChecker struct {
+	activeUsers map[string]bool
+	userIndex   map[string]*users.User
+	mu          sync.RWMutex
+}
 
-func init() {
-	activeUsers = make(map[string]bool)
+// NewActivityChecker creates a new ActivityChecker
+func NewActivityChecker() *ActivityChecker {
+	return &ActivityChecker{
+		activeUsers: make(map[string]bool),
+		userIndex:   make(map[string]*users.User),
+	}
 }
 
 // activityTypeSet for quick lookup
@@ -37,11 +43,12 @@ func newActivityTypeSet(types []string) activityTypeSet {
 }
 
 // CheckActivity checks all activity types in a single pass through repositories.
-// This is more efficient than separate passes as it reduces progress bar overhead
-// and allows for better batching of API calls per repository.
-func CheckActivity(users users.Users, organization string, repositories repository.Repositories, date string, client api.RESTClient, activityTypes []string) {
-	for _, user := range users {
-		activeUsers[user.Login] = false
+func (ac *ActivityChecker) CheckActivity(usersList users.Users, organization string, repositories repository.Repositories, date string, client api.RESTClient, activityTypes []string) {
+	// Build user index for O(1) lookups
+	for i := range usersList {
+		user := &usersList[i]
+		ac.userIndex[user.Login] = user
+		ac.activeUsers[user.Login] = false
 	}
 
 	typeSet := newActivityTypeSet(activityTypes)
@@ -60,8 +67,7 @@ func CheckActivity(users users.Users, organization string, repositories reposito
 		go func() {
 			defer wg.Done()
 			for repo := range repoChan {
-				// Process all activity types for this repo
-				checkRepoActivity(users, organization, repo.Name, date, client, typeSet, progressBar, &progressMux)
+				ac.checkRepoActivity(organization, repo.Name, date, client, typeSet, progressBar, &progressMux)
 			}
 		}()
 	}
@@ -75,12 +81,12 @@ func CheckActivity(users users.Users, organization string, repositories reposito
 }
 
 // checkRepoActivity checks all enabled activity types for a single repository.
-func checkRepoActivity(usersList users.Users, organization string, repoName string, date string, client api.RESTClient, typeSet activityTypeSet, progressBar *ui.ProgressBar, progressMux *sync.Mutex) {
+func (ac *ActivityChecker) checkRepoActivity(organization string, repoName string, date string, client api.RESTClient, typeSet activityTypeSet, progressBar *ui.ProgressBar, progressMux *sync.Mutex) {
 	// Check commits
 	if typeSet["commits"] {
 		commitList := commits.GetCommitsSinceDate(organization, repoName, date, client)
 		for _, commit := range commitList {
-			markUserActive(usersList, commit.Author.Login, "commits")
+			ac.markUserActive(commit.Author.Login, "commits")
 		}
 		progressMux.Lock()
 		progressBar.Increment()
@@ -91,7 +97,7 @@ func checkRepoActivity(usersList users.Users, organization string, repoName stri
 	if typeSet["issues"] {
 		issueList := issues.GetIssuesSinceDate(organization, repoName, date, client)
 		for _, issue := range issueList {
-			markUserActive(usersList, issue.User.Login, "issues")
+			ac.markUserActive(issue.User.Login, "issues")
 		}
 		progressMux.Lock()
 		progressBar.Increment()
@@ -102,7 +108,7 @@ func checkRepoActivity(usersList users.Users, organization string, repoName stri
 	if typeSet["issue-comments"] {
 		issueCommentList := issues.GetIssueCommentsSinceDate(organization, repoName, date, client)
 		for _, comment := range issueCommentList {
-			markUserActive(usersList, comment.User.Login, "issue-comments")
+			ac.markUserActive(comment.User.Login, "issue-comments")
 		}
 		progressMux.Lock()
 		progressBar.Increment()
@@ -113,7 +119,7 @@ func checkRepoActivity(usersList users.Users, organization string, repoName stri
 	if typeSet["pr-comments"] {
 		prCommentList := pullrequests.GetPullRequestCommentsSinceDate(organization, repoName, date, client)
 		for _, comment := range prCommentList {
-			markUserActive(usersList, comment.User.Login, "pr-comments")
+			ac.markUserActive(comment.User.Login, "pr-comments")
 		}
 		progressMux.Lock()
 		progressBar.Increment()
@@ -121,27 +127,30 @@ func checkRepoActivity(usersList users.Users, organization string, repoName stri
 	}
 }
 
-// markUserActive marks a user as active with the given activity type.
-func markUserActive(usersList users.Users, login string, activityType string) {
-	for i := range usersList {
-		user := &usersList[i]
-		if user.Login == login {
-			user.AddActivityType(activityType)
-			activeUsersMux.Lock()
-			if !user.Active && !activeUsers[user.Login] {
-				user.MakeActive()
-				activeUsers[user.Login] = true
-			}
-			activeUsersMux.Unlock()
-			break // Found the user, no need to continue
-		}
+// markUserActive marks a user as active with the given activity type using O(1) lookup.
+func (ac *ActivityChecker) markUserActive(login string, activityType string) {
+	user, exists := ac.userIndex[login]
+	if !exists {
+		return
 	}
+
+	// Use atomic method on user (handles its own locking)
+	user.MarkActiveWithType(activityType)
+
+	// Update activeUsers map
+	ac.mu.Lock()
+	ac.activeUsers[login] = true
+	ac.mu.Unlock()
 }
 
-func GenerateBarChartOfActiveUsers() {
+// GenerateBarChart generates a bar chart of active/inactive users
+func (ac *ActivityChecker) GenerateBarChart() {
+	ac.mu.RLock()
+	defer ac.mu.RUnlock()
+
 	activeCount := 0
 	inactiveCount := 0
-	for _, active := range activeUsers {
+	for _, active := range ac.activeUsers {
 		if active {
 			activeCount++
 		} else {
@@ -173,14 +182,15 @@ func GenerateUserReportCSV(users users.Users, filePath string) error {
 		return err
 	}
 
-	for _, user := range users {
+	for i := range users {
+		user := &users[i]
 		var atSlice []string
-		if !user.Active {
+		if !user.IsActive() {
 			atSlice = []string{"none"}
 		} else {
 			atSlice = user.GetActivityTypes()
 		}
-		record := []string{user.Login, user.Email, strconv.FormatBool(user.Active), strings.Join(atSlice, ",")}
+		record := []string{user.Login, user.Email, strconv.FormatBool(user.IsActive()), strings.Join(atSlice, ",")}
 		if err := writer.Write(record); err != nil {
 			return err
 		}

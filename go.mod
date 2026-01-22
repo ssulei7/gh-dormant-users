@@ -7,7 +7,7 @@ require (
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/cli/go-gh v1.2.1
-	github.com/github/copilot-sdk/go v0.0.0-20260116204546-ac0e76328d07
+	github.com/github/copilot-sdk/go v0.1.16-preview.0
 	github.com/spf13/cobra v1.8.1
 )
 

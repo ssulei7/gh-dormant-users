@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
@@ -127,7 +128,7 @@ type SimpleSpinner struct {
 	message  string
 	frames   []string
 	frame    int
-	running  bool
+	running  atomic.Bool
 	stopChan chan struct{}
 }
 
@@ -143,11 +144,11 @@ func NewSimpleSpinner(message string) *SimpleSpinner {
 
 // Start begins the spinner animation
 func (s *SimpleSpinner) Start() {
-	s.running = true
+	s.running.Store(true)
 	spinStyle := lipgloss.NewStyle().Foreground(cyan)
 
 	go func() {
-		for s.running {
+		for s.running.Load() {
 			select {
 			case <-s.stopChan:
 				return
@@ -162,18 +163,18 @@ func (s *SimpleSpinner) Start() {
 
 // Stop stops the spinner and prints a success message
 func (s *SimpleSpinner) Stop(message string) {
-	s.running = false
+	s.running.Store(false)
 	close(s.stopChan)
 	// Clear the line and print success
 	fmt.Fprintf(os.Stderr, "\r%s\r", strings.Repeat(" ", len(s.message)+5))
-	Success(message)
+	Success("%s", message)
 }
 
 // StopFail stops the spinner and prints a failure message
 func (s *SimpleSpinner) StopFail(message string) {
-	s.running = false
+	s.running.Store(false)
 	close(s.stopChan)
 	// Clear the line and print error
 	fmt.Fprintf(os.Stderr, "\r%s\r", strings.Repeat(" ", len(s.message)+5))
-	Error(message)
+	Error("%s", message)
 }

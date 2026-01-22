@@ -168,7 +168,10 @@ func (s *CSVStats) FormatForPrompt() string {
 		})
 
 		for _, ac := range sorted {
-			pct := float64(ac.count) / float64(s.ActiveUsers) * 100
+			var pct float64
+			if s.ActiveUsers > 0 {
+				pct = float64(ac.count) / float64(s.ActiveUsers) * 100
+			}
 			sb.WriteString(fmt.Sprintf("- %s: %d users (%.1f%% of active)\n", ac.name, ac.count, pct))
 		}
 		sb.WriteString("\n")

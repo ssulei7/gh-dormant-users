@@ -30,25 +30,43 @@ func generateDormantUserReport(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	// Validate date is no longer than 3 months, and turn into an ISO string
-	isDateValid := dateUtil.ValidateDate(date)
-	if !isDateValid {
-		ui.Error("Date must be within the last 3 months")
+	// Validate date is no longer than 3 months
+	if err := dateUtil.ValidateDate(date); err != nil {
+		ui.Error("%v", err)
 		os.Exit(1)
 	}
 
 	// Convert date to iso 8601 format
-	isoDate := dateUtil.GetISODate(date)
-	users := users.GetOrganizationUsers(orgName, email, client)
+	isoDate, err := dateUtil.GetISODate(date)
+	if err != nil {
+		ui.Error("%v", err)
+		os.Exit(1)
+	}
 
-	repositories := repository.GetOrgRepositories(orgName, client)
+	users, err := users.GetOrganizationUsers(orgName, email, client)
+	if err != nil {
+		ui.Error("%v", err)
+		os.Exit(1)
+	}
+
+	repositories, err := repository.GetOrgRepositories(orgName, client)
+	if err != nil {
+		ui.Error("%v", err)
+		os.Exit(1)
+	}
 
 	activityTypes, _ := cmd.Flags().GetStringSlice("activity-types")
 
 	// Now, check for activity in the organization's repositories
 	ui.BoxWithTitle("Organization Info", fmt.Sprintf("Number of users: %v\nNumber of repositories: %v", len(users), len(repositories)))
 	ui.Info("Checking for activity...")
-	activity.CheckActivity(users, orgName, repositories, isoDate, client, activityTypes)
-	activity.GenerateBarChartOfActiveUsers()
-	activity.GenerateUserReportCSV(users, orgName+"-dormant-users.csv")
+
+	checker := activity.NewActivityChecker()
+	checker.CheckActivity(users, orgName, repositories, isoDate, client, activityTypes)
+	checker.GenerateBarChart()
+
+	if err := activity.GenerateUserReportCSV(users, orgName+"-dormant-users.csv"); err != nil {
+		ui.Error("Failed to generate report: %v", err)
+		os.Exit(1)
+	}
 }
