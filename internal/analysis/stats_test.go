@@ -3,6 +3,7 @@ package analysis
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -194,7 +195,7 @@ func TestCSVStats_FormatForPrompt(t *testing.T) {
 	}
 
 	for _, expected := range expectedStrings {
-		if !contains(output, expected) {
+		if !strings.Contains(output, expected) {
 			t.Errorf("FormatForPrompt() output missing %q", expected)
 		}
 	}

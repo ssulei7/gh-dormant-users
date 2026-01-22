@@ -32,7 +32,7 @@ func (a *Analyzer) IsCopilotAvailable() bool {
 // AnalyzeCSV analyzes a CSV file using the specified template and returns the AI response
 func (a *Analyzer) AnalyzeCSV(csvPath string, templateName string, customPrompt string) (string, error) {
 	if !a.copilotAvailable {
-		return "", fmt.Errorf("GitHub Copilot CLI is not available. Install it with: gh extension install github/gh-copilot")
+		return "", fmt.Errorf("GitHub Copilot CLI is not available. Install it with: brew install copilot-cli (macOS/Linux) or winget install GitHub.Copilot (Windows)")
 	}
 
 	template := GetTemplate(templateName)
@@ -141,6 +141,6 @@ func (a *Analyzer) CheckCopilotStatus() {
 		ui.Success("GitHub Copilot CLI is available")
 	} else {
 		ui.Warning("GitHub Copilot CLI is not available")
-		ui.Info("Install it with: gh extension install github/gh-copilot")
+		ui.Info("Install it with: brew install copilot-cli (macOS/Linux) or winget install GitHub.Copilot (Windows)")
 	}
 }

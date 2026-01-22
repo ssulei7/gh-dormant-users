@@ -55,7 +55,7 @@ Five pre-built templates optimize prompts for specific use cases:
 
 ### 3. Copilot Integration (`internal/analysis/analyzer.go`)
 
-The analyzer uses the [GitHub Copilot SDK for Go](https://github.com/github/copilot-sdk/tree/main/go):
+The analyzer uses the [GitHub Copilot SDK for Go](https://github.com/github/copilot-sdk/tree/main/go) and requires the [Copilot CLI](https://github.com/github/copilot-cli) to be installed:
 
 ```go
 // Create client and session
@@ -64,15 +64,15 @@ session, _ := client.CreateSession(&copilot.SessionConfig{
     Model: "gpt-4o",
 })
 
-// Send prompt and stream response
-session.Send(copilot.MessageOptions{
+// Send prompt and wait for response
+response, _ := session.SendAndWait(copilot.MessageOptions{
     Prompt: formattedPrompt,
-})
+}, timeout)
 ```
 
 **Safety features:**
 - ⏱️ **2-minute timeout** prevents indefinite hangs
-- ✅ **Copilot CLI check** before attempting analysis
+- ✅ **Copilot CLI check** verifies `copilot` binary is in PATH before attempting analysis
 - 🛡️ **Error handling** for network/API failures
 
 ---
@@ -84,7 +84,7 @@ session.Send(copilot.MessageOptions{
 
 2. COMMAND validates:
    ├── File exists?
-   ├── Copilot CLI installed?
+   ├── Copilot CLI installed? (checks for `copilot` binary in PATH)
    └── Valid template name?
 
 3. PARSER reads CSV and computes:
@@ -165,7 +165,7 @@ Then update `FormatForPrompt()` to include the new data.
 
 | Issue | Solution |
 |-------|----------|
-| "Copilot CLI not available" | Run `gh extension install github/gh-copilot` |
+| "Copilot CLI not available" | Install with `brew install copilot-cli` (macOS/Linux) or `winget install GitHub.Copilot` (Windows) |
 | Timeout errors | Large orgs may need longer timeout; check network |
 | Empty response | Verify CSV has correct schema (Username, Active, ActivityTypes) |
 | Slow analysis | Use `--prompt-only` to verify prompt size is reasonable |

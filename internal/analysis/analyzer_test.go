@@ -3,6 +3,7 @@ package analysis
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -136,7 +137,7 @@ func TestBuildPrompt_Success(t *testing.T) {
 		t.Error("BuildPrompt() returned empty prompt")
 	}
 	// Now we check for formatted stats, not raw CSV
-	if !contains(prompt, "Total Users: 2") {
+	if !strings.Contains(prompt, "Total Users: 2") {
 		t.Error("BuildPrompt() prompt should contain aggregated stats")
 	}
 }
@@ -158,11 +159,11 @@ func TestBuildPrompt_CustomTemplateSuccess(t *testing.T) {
 	if err != nil {
 		t.Errorf("BuildPrompt() returned error: %v", err)
 	}
-	if !contains(prompt, customPrompt) {
+	if !strings.Contains(prompt, customPrompt) {
 		t.Error("BuildPrompt() prompt should contain custom prompt")
 	}
 	// Check for aggregated stats instead of raw CSV
-	if !contains(prompt, "Total Users: 1") {
+	if !strings.Contains(prompt, "Total Users: 1") {
 		t.Error("BuildPrompt() prompt should contain aggregated stats")
 	}
 }
@@ -190,7 +191,7 @@ func TestBuildPrompt_AllTemplates(t *testing.T) {
 				t.Errorf("BuildPrompt(%s) returned empty prompt", tmpl)
 			}
 			// Check for aggregated stats instead of raw CSV
-			if !contains(prompt, "Total Users") {
+			if !strings.Contains(prompt, "Total Users") {
 				t.Errorf("BuildPrompt(%s) prompt should contain aggregated stats", tmpl)
 			}
 		})
