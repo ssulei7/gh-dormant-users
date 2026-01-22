@@ -1,7 +1,6 @@
 package commits
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -33,11 +32,7 @@ func GetCommitsSinceDate(organization string, repository string, date string, cl
 	var allCommits Commits
 	url := fmt.Sprintf("repos/%s/%s/commits?per_page=100&since=%s", organization, repository, date)
 	for {
-		if err := limiter.WaitForTokenAndAcquire(context.Background()); err != nil {
-			pterm.Error.Printf("Failed to acquire rate limit token: %v\n", err)
-			return nil
-		}
-		
+		limiter.AcquireConcurrentLimiter()
 		response, err := client.Request("GET", url, nil)
 		if err != nil {
 			limiter.ReleaseConcurrentLimiter()
@@ -55,8 +50,6 @@ func GetCommitsSinceDate(organization string, repository string, date string, cl
 		response.Body.Close()
 		limiter.ReleaseConcurrentLimiter()
 		limiter.CheckAndHandleRateLimit(response)
-
-		limiter.ReleaseAndHandleRateLimit(response)
 
 		if err != nil {
 			ui.Error("Failed to decode commits: %v", err)

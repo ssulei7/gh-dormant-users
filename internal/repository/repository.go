@@ -1,7 +1,6 @@
 package repository
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -26,12 +25,7 @@ func GetOrgRepositories(organization string, client api.RESTClient) Repositories
 
 	// Fetch first page
 	url := fmt.Sprintf("orgs/%s/repos?per_page=100", organization)
-	if err := limiter.WaitForTokenAndAcquire(context.Background()); err != nil {
-		spinner.Fail("Failed to acquire rate limit token")
-		pterm.Error.Printf("Failed to acquire rate limit token: %v\n", err)
-		os.Exit(1)
-	}
-	
+	limiter.AcquireConcurrentLimiter()
 	response, err := client.Request("GET", url, nil)
 	if err != nil {
 		limiter.ReleaseConcurrentLimiter()
@@ -47,8 +41,6 @@ func GetOrgRepositories(organization string, client api.RESTClient) Repositories
 	response.Body.Close()
 	limiter.ReleaseConcurrentLimiter()
 	limiter.CheckAndHandleRateLimit(response)
-
-	limiter.ReleaseAndHandleRateLimit(response)
 
 	if err != nil {
 		spinner.StopFail("Failed to decode repositories")
@@ -69,10 +61,7 @@ func GetOrgRepositories(organization string, client api.RESTClient) Repositories
 		pageURLs = append(pageURLs, nextURL)
 
 		// Fetch next page to get updated Link header
-		if err := limiter.WaitForTokenAndAcquire(context.Background()); err != nil {
-			continue
-		}
-		
+		limiter.AcquireConcurrentLimiter()
 		response, err := client.Request("GET", nextURL, nil)
 		if err != nil {
 			limiter.ReleaseConcurrentLimiter()
@@ -96,10 +85,7 @@ func GetOrgRepositories(organization string, client api.RESTClient) Repositories
 			go func() {
 				defer wg.Done()
 				for pageURL := range pageChan {
-					if err := limiter.WaitForTokenAndAcquire(context.Background()); err != nil {
-						continue
-					}
-					
+					limiter.AcquireConcurrentLimiter()
 					response, err := client.Request("GET", pageURL, nil)
 					if err != nil {
 						limiter.ReleaseConcurrentLimiter()
@@ -112,8 +98,6 @@ func GetOrgRepositories(organization string, client api.RESTClient) Repositories
 					response.Body.Close()
 					limiter.ReleaseConcurrentLimiter()
 					limiter.CheckAndHandleRateLimit(response)
-
-					limiter.ReleaseAndHandleRateLimit(response)
 
 					if err != nil {
 						continue
