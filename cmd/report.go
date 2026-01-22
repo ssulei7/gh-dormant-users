@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/ssulei7/gh-dormant-users/internal/activity"
 	dateUtil "github.com/ssulei7/gh-dormant-users/internal/date"
+	"github.com/ssulei7/gh-dormant-users/internal/limiter"
 	"github.com/ssulei7/gh-dormant-users/internal/repository"
 	"github.com/ssulei7/gh-dormant-users/internal/ui"
 	"github.com/ssulei7/gh-dormant-users/internal/users"
@@ -29,6 +30,9 @@ func generateDormantUserReport(cmd *cobra.Command, args []string) {
 		ui.Error("Failed to create REST client: %v", err)
 		os.Exit(1)
 	}
+
+	// Detect rate limit for this token and configure limiter
+	limiter.DetectRateLimit(client)
 
 	// Validate date is no longer than 3 months, and turn into an ISO string
 	isDateValid := dateUtil.ValidateDate(date)
