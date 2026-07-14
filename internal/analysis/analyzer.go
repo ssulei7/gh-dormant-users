@@ -1,6 +1,7 @@
 package analysis
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -70,28 +71,32 @@ func (a *Analyzer) sendToCopilot(prompt string) (string, error) {
 		LogLevel: "error",
 	})
 
-	if err := client.Start(); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), DefaultTimeout)
+	defer cancel()
+
+	if err := client.Start(ctx); err != nil {
 		return "", fmt.Errorf("failed to start Copilot client: %w", err)
 	}
 	defer client.Stop()
 
-	session, err := client.CreateSession(&copilot.SessionConfig{
-		Model: "gpt-4o",
-	})
+	// Omit Model to let the SDK/server select its default model.
+	session, err := client.CreateSession(ctx, &copilot.SessionConfig{})
 	if err != nil {
 		return "", fmt.Errorf("failed to create Copilot session: %w", err)
 	}
-	defer session.Destroy()
+	defer session.Disconnect()
 
-	response, err := session.SendAndWait(copilot.MessageOptions{
+	response, err := session.SendAndWait(ctx, copilot.MessageOptions{
 		Prompt: prompt,
-	}, DefaultTimeout)
+	})
 	if err != nil {
 		return "", fmt.Errorf("copilot error: %w", err)
 	}
 
-	if response != nil && response.Data.Content != nil {
-		return *response.Data.Content, nil
+	if response != nil {
+		if data, ok := response.Data.(*copilot.AssistantMessageData); ok {
+			return data.Content, nil
+		}
 	}
 	return "", nil
 }
