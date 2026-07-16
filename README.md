@@ -30,6 +30,14 @@ gh dormant-users report [flags]
 - `-e, --email`: Check if user has an email.
 - `--org-name string`: The name of the organization to report upon. (required)
 - `--activity-types strings`: Comma-separated list of activity types to check (commits, issues, issue-comments, pr-comments). Default is all types.
+- `--request-mode string`: API request mode. `bounded` uses controlled concurrency (default); `safe` sends requests serially.
+- `--initial-concurrency int`: Initial concurrent requests in bounded mode (default 5).
+- `--max-concurrency int`: Adaptive concurrency ceiling in bounded mode, from 1 to 15 (default 15).
+- `--requests-per-second float`: Global request-rate cap from 0 to 15 (default 10).
+- `--rate-limit-reserve int`: Percentage of the primary rate limit kept in reserve (default 10).
+- `--cache-dir string`: Directory for the strict ETag response cache.
+- `--no-cache`: Disable the persistent response cache.
+- `--clear-cache`: Clear the response cache before collecting data.
 
 ### Example
 
@@ -48,6 +56,14 @@ gh dormant-users report --date "Mar 1 2024" --org-name foobar --activity-types c
 ## Output
 
 The tool generates a CSV report of dormant users and displays a bar chart of active vs. inactive users. The CSV file is saved in the current directory with the name `<org-name>-dormant-users.csv`.
+
+### API collection and rate limits
+
+The default `bounded` request mode starts with five concurrent requests and adaptively scales toward a ceiling of 15 only when measured latency prevents the collector from reaching its 10 requests/second start-rate cap. Concurrency is halved after secondary-limit responses and increases again only after a cooldown. The request-rate cap remains 600 requests per minute, below GitHub's published 900-point-per-minute REST ceiling for standard `GET` requests. Use `--request-mode safe` to pin concurrency to one. GitHub can enforce undisclosed secondary limits in either mode.
+
+Responses with an `ETag` or `Last-Modified` validator are cached under the operating system's user cache directory. Every later run still revalidates each cached response with GitHub; the tool never serves intentionally stale data. An authenticated `304 Not Modified` response does not consume the primary REST rate limit, but it can still contribute to secondary limits. Cache files can contain private repository and user activity data and are written with user-only permissions.
+
+GitHub CLI OAuth requests share the authenticated user's primary allowance with other personal access tokens, OAuth apps, and GitHub Apps acting on that user's behalf. The collector runs until the configured primary reserve is reached, then waits for reset; it also honors `Retry-After` and reports request/cache statistics at the end of a run. Fresh responses still count toward the primary limit; no client can guarantee avoidance of GitHub's undisclosed secondary-limit conditions.
 
 ### CSV Schema
 

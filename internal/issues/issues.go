@@ -1,15 +1,11 @@
 package issues
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/cli/go-gh/pkg/api"
-	"github.com/ssulei7/gh-dormant-users/internal/header"
-	"github.com/ssulei7/gh-dormant-users/internal/limiter"
-	"github.com/ssulei7/gh-dormant-users/internal/ui"
+	"github.com/ssulei7/gh-dormant-users/internal/githubapi"
 )
 
 type Issue struct {
@@ -31,95 +27,28 @@ type IssueComment struct {
 }
 
 type IssueComments []IssueComment
-
 type Issues []Issue
 
-func GetIssuesSinceDate(organization string, repo string, date string, client api.RESTClient) Issues {
-	var allIssues Issues
+func GetIssuesSinceDate(organization string, repo string, date string, client api.RESTClient) (Issues, error) {
 	url := fmt.Sprintf("repos/%s/%s/issues?per_page=100&since=%s", organization, repo, date)
-	for {
-		limiter.AcquireConcurrentLimiter()
-		response, err := client.Request("GET", url, nil)
-		if err != nil {
-			limiter.ReleaseConcurrentLimiter()
-			if strings.Contains(err.Error(), "Git Repository is empty.") {
-				break
-			} else {
-				return nil
-			}
+	issueList, err := githubapi.GetAll[Issue](client, url)
+	if err != nil {
+		if strings.Contains(err.Error(), "Git Repository is empty.") {
+			return nil, nil
 		}
-
-		var issues Issues
-		decoder := json.NewDecoder(response.Body)
-		err = decoder.Decode(&issues)
-		linkHeader := response.Header.Get("Link")
-		response.Body.Close()
-		limiter.ReleaseConcurrentLimiter()
-		limiter.CheckAndHandleRateLimit(response)
-
-		if err != nil {
-			ui.Error("Failed to decode issues: %v", err)
-			os.Exit(1)
-		}
-
-		allIssues = append(allIssues, issues...)
-
-		if linkHeader == "" {
-			break
-		}
-
-		nextURL := header.GetNextPageURL(linkHeader)
-		if nextURL == "" {
-			break
-		}
-
-		url = nextURL
+		return nil, fmt.Errorf("fetch issues for %s/%s: %w", organization, repo, err)
 	}
-
-	return allIssues
+	return Issues(issueList), nil
 }
 
-func GetIssueCommentsSinceDate(organization string, repo string, date string, client api.RESTClient) IssueComments {
-	var allIssueComments IssueComments
+func GetIssueCommentsSinceDate(organization string, repo string, date string, client api.RESTClient) (IssueComments, error) {
 	url := fmt.Sprintf("repos/%s/%s/issues/comments?per_page=100&since=%s", organization, repo, date)
-	for {
-		limiter.AcquireConcurrentLimiter()
-		response, err := client.Request("GET", url, nil)
-		if err != nil {
-			limiter.ReleaseConcurrentLimiter()
-			if strings.Contains(err.Error(), "Git Repository is empty.") {
-				break
-			} else {
-				return nil
-			}
+	comments, err := githubapi.GetAll[IssueComment](client, url)
+	if err != nil {
+		if strings.Contains(err.Error(), "Git Repository is empty.") {
+			return nil, nil
 		}
-
-		var issueComments IssueComments
-		decoder := json.NewDecoder(response.Body)
-		err = decoder.Decode(&issueComments)
-		linkHeader := response.Header.Get("Link")
-		response.Body.Close()
-		limiter.ReleaseConcurrentLimiter()
-		limiter.CheckAndHandleRateLimit(response)
-
-		if err != nil {
-			ui.Error("Failed to decode issue comments: %v", err)
-			os.Exit(1)
-		}
-
-		allIssueComments = append(allIssueComments, issueComments...)
-
-		if linkHeader == "" {
-			break
-		}
-
-		nextURL := header.GetNextPageURL(linkHeader)
-		if nextURL == "" {
-			break
-		}
-
-		url = nextURL
+		return nil, fmt.Errorf("fetch issue comments for %s/%s: %w", organization, repo, err)
 	}
-
-	return allIssueComments
+	return IssueComments(comments), nil
 }
