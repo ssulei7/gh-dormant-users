@@ -203,14 +203,21 @@ func TestCheckActivityMarksUsersForAllSelectedActivity(t *testing.T) {
 		t.Fatalf("CheckActivity returned error: %v", err)
 	}
 
+	expectedTypes := map[string]string{
+		"commit-user":  "commits",
+		"issue-user":   "issues",
+		"comment-user": "issue-comments",
+		"pr-user":      "pr-comments",
+	}
 	for i := range userList[:4] {
-		if !userList[i].IsActive() {
-			t.Fatalf("%s was not marked active", userList[i].Login)
+		user := &userList[i]
+		if !user.IsActive() {
+			t.Fatalf("%s was not marked active", user.Login)
 		}
-		types := userList[i].GetActivityTypes()
+		types := user.GetActivityTypes()
 		sort.Strings(types)
-		if len(types) != 1 {
-			t.Fatalf("%s activity types = %v", userList[i].Login, types)
+		if len(types) != 1 || types[0] != expectedTypes[user.Login] {
+			t.Fatalf("%s activity types = %v, want %q", user.Login, types, expectedTypes[user.Login])
 		}
 	}
 	if userList[4].IsActive() {
