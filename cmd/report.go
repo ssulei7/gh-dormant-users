@@ -24,8 +24,26 @@ var reportCmd = &cobra.Command{
 	RunE:  generateDormantUserReport,
 }
 
-func generateDormantUserReport(cmd *cobra.Command, args []string) error {
-	// First, get all users in an organization using the gh module
+type reportOptions struct {
+	orgName            string
+	email              bool
+	date               string
+	requestMode        string
+	initialConcurrency int
+	maxConcurrency     int
+	requestsPerSecond  float64
+	rateLimitReserve   int
+	cacheDir           string
+	noCache            bool
+	clearCache         bool
+}
+
+var (
+	defaultCacheDir = githubapi.DefaultCacheDir
+	clearAPICache   = githubapi.ClearCache
+)
+
+func readReportOptions(cmd *cobra.Command) reportOptions {
 	orgName, _ := cmd.Flags().GetString("org-name")
 	email, _ := cmd.Flags().GetBool("email")
 	date, _ := cmd.Flags().GetString("date")
@@ -37,37 +55,60 @@ func generateDormantUserReport(cmd *cobra.Command, args []string) error {
 	cacheDir, _ := cmd.Flags().GetString("cache-dir")
 	noCache, _ := cmd.Flags().GetBool("no-cache")
 	clearCache, _ := cmd.Flags().GetBool("clear-cache")
+	return reportOptions{
+		orgName:            orgName,
+		email:              email,
+		date:               date,
+		requestMode:        requestMode,
+		initialConcurrency: initialConcurrency,
+		maxConcurrency:     maxConcurrency,
+		requestsPerSecond:  requestsPerSecond,
+		rateLimitReserve:   rateLimitReserve,
+		cacheDir:           cacheDir,
+		noCache:            noCache,
+		clearCache:         clearCache,
+	}
+}
 
-	if cacheDir == "" {
-		var err error
-		cacheDir, err = githubapi.DefaultCacheDir()
+func prepareReportOptions(options reportOptions) (reportOptions, error) {
+	if options.cacheDir == "" {
+		cacheDir, err := defaultCacheDir()
 		if err != nil {
-			return err
+			return reportOptions{}, err
 		}
+		options.cacheDir = cacheDir
 	}
-	if clearCache {
-		if err := githubapi.ClearCache(cacheDir); err != nil {
-			return err
+	if options.clearCache {
+		if err := clearAPICache(options.cacheDir); err != nil {
+			return reportOptions{}, err
 		}
-		ui.Info("Cleared API cache at %s", cacheDir)
+		ui.Info("Cleared API cache at %s", options.cacheDir)
 	}
-	switch strings.ToLower(requestMode) {
+	switch strings.ToLower(options.requestMode) {
 	case "safe":
-		initialConcurrency = 1
-		maxConcurrency = 1
+		options.initialConcurrency = 1
+		options.maxConcurrency = 1
 	case "bounded":
 	default:
-		return fmt.Errorf("invalid request mode %q; expected safe or bounded", requestMode)
+		return reportOptions{}, fmt.Errorf("invalid request mode %q; expected safe or bounded", options.requestMode)
+	}
+	return options, nil
+}
+
+func generateDormantUserReport(cmd *cobra.Command, args []string) error {
+	options, err := prepareReportOptions(readReportOptions(cmd))
+	if err != nil {
+		return err
 	}
 
 	coordinator, err := githubapi.NewCoordinator(githubapi.Config{
 		Transport:          http.DefaultTransport,
-		CacheDir:           cacheDir,
-		CacheEnabled:       !noCache,
-		InitialConcurrency: initialConcurrency,
-		MaxConcurrency:     maxConcurrency,
-		RequestsPerSecond:  requestsPerSecond,
-		RateLimitReserve:   float64(rateLimitReserve) / 100,
+		CacheDir:           options.cacheDir,
+		CacheEnabled:       !options.noCache,
+		InitialConcurrency: options.initialConcurrency,
+		MaxConcurrency:     options.maxConcurrency,
+		RequestsPerSecond:  options.requestsPerSecond,
+		RateLimitReserve:   float64(options.rateLimitReserve) / 100,
 	})
 	if err != nil {
 		return fmt.Errorf("configure GitHub API requests: %w", err)
@@ -91,22 +132,22 @@ func generateDormantUserReport(cmd *cobra.Command, args []string) error {
 	}
 
 	// Validate date is no longer than 3 months
-	if err := dateUtil.ValidateDate(date); err != nil {
+	if err := dateUtil.ValidateDate(options.date); err != nil {
 		return err
 	}
 
 	// Convert date to iso 8601 format
-	isoDate, err := dateUtil.GetISODate(date)
+	isoDate, err := dateUtil.GetISODate(options.date)
 	if err != nil {
 		return err
 	}
 
-	users, err := users.GetOrganizationUsers(orgName, email, restClient, gqlClient)
+	users, err := users.GetOrganizationUsers(options.orgName, options.email, restClient, gqlClient)
 	if err != nil {
 		return err
 	}
 
-	repositories, err := repository.GetOrgRepositories(orgName, restClient)
+	repositories, err := repository.GetOrgRepositories(options.orgName, restClient)
 	if err != nil {
 		return err
 	}
@@ -117,13 +158,13 @@ func generateDormantUserReport(cmd *cobra.Command, args []string) error {
 	ui.BoxWithTitle("Organization Info", fmt.Sprintf("Number of users: %v\nNumber of repositories: %v", len(users), len(repositories)))
 	ui.Info("Checking for activity...")
 
-	checker := activity.NewActivityChecker(maxConcurrency)
-	if err := checker.CheckActivity(users, orgName, repositories, isoDate, restClient, activityTypes); err != nil {
+	checker := activity.NewActivityChecker(options.maxConcurrency)
+	if err := checker.CheckActivity(users, options.orgName, repositories, isoDate, restClient, activityTypes); err != nil {
 		return fmt.Errorf("collect activity: %w", err)
 	}
 	checker.GenerateBarChart()
 
-	if err := activity.GenerateUserReportCSV(users, orgName+"-dormant-users.csv"); err != nil {
+	if err := activity.GenerateUserReportCSV(users, options.orgName+"-dormant-users.csv"); err != nil {
 		return fmt.Errorf("generate report: %w", err)
 	}
 
