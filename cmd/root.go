@@ -8,8 +8,10 @@ import (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "gh-dormant-users",
-	Short: "A CLI tool to report upon and take action on dormant GitHub users within GHEC / GHES",
+	Use:           "gh-dormant-users",
+	Short:         "A CLI tool to report upon and take action on dormant GitHub users within GHEC / GHES",
+	SilenceErrors: true,
+	SilenceUsage:  true,
 	Run: func(cmd *cobra.Command, args []string) {
 		// Display welcome box with cyan text
 		ui.CyanBox("GitHub Dormant Users ૮(-.-)ა")
