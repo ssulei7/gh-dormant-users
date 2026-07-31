@@ -24,8 +24,16 @@ jobs:
       - name: Install dependencies
         run: go mod download
 
-      - name: Test
-        run: go test ./...
+      - name: Test with coverage
+        env:
+          COVERAGE_THRESHOLD: '70.0'
+        run: |
+          go test ./... -coverprofile=coverage.out
+          coverage=$(go tool cover -func=coverage.out | awk '/^total:/ {gsub(/%/, "", $3); print $3}')
+          test -n "$coverage"
+          echo "Total statement coverage: ${coverage}%"
+          awk -v coverage="$coverage" -v threshold="$COVERAGE_THRESHOLD" \
+            'BEGIN { if (coverage + 0 < threshold + 0) exit 1 }'
 
       - name: Build
         run: go build -v ./...
